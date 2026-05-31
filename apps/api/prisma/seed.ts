@@ -25,7 +25,7 @@ async function main() {
 
   const merchant = await prisma.merchant.upsert({
     where: { email: "merchant@payhub.local" },
-    update: {},
+    update: { agentId: agent.id },
     create: {
       agentId: agent.id,
       name: "Demo Global Shop",
@@ -47,9 +47,27 @@ async function main() {
     },
   });
 
+  await prisma.wallet.upsert({
+    where: { merchantId: merchant.id },
+    update: {},
+    create: {
+      merchantId: merchant.id,
+      balance: new Prisma.Decimal("12000.00"),
+      availableBalance: new Prisma.Decimal("9500.00"),
+      frozenBalance: new Prisma.Decimal("2500.00"),
+      currency: "USD",
+    },
+  });
+
   await prisma.user.upsert({
     where: { email: "admin@payhub.local" },
-    update: {},
+    update: {
+      passwordHash,
+      role: "SUPER_ADMIN",
+      status: "ACTIVE",
+      merchantId: null,
+      agentId: null,
+    },
     create: {
       email: "admin@payhub.local",
       passwordHash,
@@ -60,7 +78,13 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "agent@payhub.local" },
-    update: {},
+    update: {
+      passwordHash: agentPasswordHash,
+      role: "AGENT_ADMIN",
+      agentId: agent.id,
+      merchantId: null,
+      status: "ACTIVE",
+    },
     create: {
       email: "agent@payhub.local",
       passwordHash: agentPasswordHash,
@@ -72,7 +96,13 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "merchant@payhub.local" },
-    update: {},
+    update: {
+      passwordHash: merchantPasswordHash,
+      role: "MERCHANT_ADMIN",
+      merchantId: merchant.id,
+      agentId: null,
+      status: "ACTIVE",
+    },
     create: {
       email: "merchant@payhub.local",
       passwordHash: merchantPasswordHash,
@@ -82,38 +112,76 @@ async function main() {
     },
   });
 
-  const supplier = await prisma.supplier.create({
-    data: {
-      name: "MockPay PSP",
-      country: "SG",
-      contactName: "PSP Support",
-      email: "support@mockpay.local",
-      apiBaseUrl: "https://mockpay.local/api",
-      channels: {
-        create: [
-          {
-            name: "MockPay Primary Card",
-            paymentMethod: "CARD",
-            country: "GLOBAL",
-            currency: "USD",
-            feeRate: new Prisma.Decimal("0.018"),
-            priority: 1,
-            isPrimary: true,
-          },
-          {
-            name: "MockPay Backup Card",
-            paymentMethod: "CARD",
-            country: "GLOBAL",
-            currency: "USD",
-            feeRate: new Prisma.Decimal("0.023"),
-            priority: 2,
-            isBackup: true,
-          },
-        ],
-      },
-    },
+  let supplier = await prisma.supplier.findFirst({
+    where: { name: "MockPay PSP" },
     include: { channels: true },
   });
+
+  if (!supplier) {
+    supplier = await prisma.supplier.create({
+      data: {
+        name: "MockPay PSP",
+        country: "SG",
+        contactName: "PSP Support",
+        email: "support@mockpay.local",
+        apiBaseUrl: "https://mockpay.local/api",
+        channels: {
+          create: [
+            {
+              name: "MockPay Primary Card",
+              paymentMethod: "CARD",
+              country: "GLOBAL",
+              currency: "USD",
+              feeRate: new Prisma.Decimal("0.018"),
+              priority: 1,
+              isPrimary: true,
+            },
+            {
+              name: "MockPay Backup Card",
+              paymentMethod: "CARD",
+              country: "GLOBAL",
+              currency: "USD",
+              feeRate: new Prisma.Decimal("0.023"),
+              priority: 2,
+              isBackup: true,
+            },
+          ],
+        },
+      },
+      include: { channels: true },
+    });
+  }
+
+  let primaryChannel = supplier.channels.find((channel) => channel.name === "MockPay Primary Card");
+  if (!primaryChannel) {
+    primaryChannel = await prisma.channel.create({
+      data: {
+        supplierId: supplier.id,
+        name: "MockPay Primary Card",
+        paymentMethod: "CARD",
+        country: "GLOBAL",
+        currency: "USD",
+        feeRate: new Prisma.Decimal("0.018"),
+        priority: 1,
+        isPrimary: true,
+      },
+    });
+  }
+
+  if (!supplier.channels.some((channel) => channel.name === "MockPay Backup Card")) {
+    await prisma.channel.create({
+      data: {
+        supplierId: supplier.id,
+        name: "MockPay Backup Card",
+        paymentMethod: "CARD",
+        country: "GLOBAL",
+        currency: "USD",
+        feeRate: new Prisma.Decimal("0.023"),
+        priority: 2,
+        isBackup: true,
+      },
+    });
+  }
 
   const apiKey = await prisma.apiKey.upsert({
     where: { apiKey: "pk_demo_global_shop" },
@@ -126,21 +194,29 @@ async function main() {
     },
   });
 
-  await prisma.webhook.create({
-    data: {
+  const webhook = await prisma.webhook.findFirst({
+    where: {
       merchantId: merchant.id,
       url: "https://merchant.example.com/webhooks/payhub",
-      secret: "whsec_demo",
-      status: "ACTIVE",
     },
   });
+  if (!webhook) {
+    await prisma.webhook.create({
+      data: {
+        merchantId: merchant.id,
+        url: "https://merchant.example.com/webhooks/payhub",
+        secret: "whsec_demo",
+        status: "ACTIVE",
+      },
+    });
+  }
 
   const order = await prisma.order.upsert({
     where: { orderNo: "P202600001" },
     update: {},
     create: {
       merchantId: merchant.id,
-      channelId: supplier.channels[0].id,
+      channelId: primaryChannel.id,
       orderNo: "P202600001",
       merchantOrderNo: "M202600001",
       amount: new Prisma.Decimal("100.00"),
@@ -155,18 +231,29 @@ async function main() {
   });
 
   const wallet = await prisma.wallet.findUniqueOrThrow({ where: { merchantId: merchant.id } });
-  await prisma.walletTransaction.create({
-    data: {
+  const walletTransaction = await prisma.walletTransaction.findFirst({
+    where: {
       walletId: wallet.id,
       merchantId: merchant.id,
-      type: "PAYMENT_IN",
-      amount: new Prisma.Decimal("97.10"),
-      balanceAfter: wallet.availableBalance,
       referenceType: "ORDER",
       referenceId: order.id,
       description: "Seed payment success",
     },
   });
+  if (!walletTransaction) {
+    await prisma.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        merchantId: merchant.id,
+        type: "PAYMENT_IN",
+        amount: new Prisma.Decimal("97.10"),
+        balanceAfter: wallet.availableBalance,
+        referenceType: "ORDER",
+        referenceId: order.id,
+        description: "Seed payment success",
+      },
+    });
+  }
 
   await prisma.withdraw.upsert({
     where: { withdrawNo: "W202600001" },
@@ -184,6 +271,28 @@ async function main() {
   });
 
   for (const platform of ["SHOPIFY", "WOOCOMMERCE", "SHOPLINE", "MAGENTO", "OPENCART"] as const) {
+    const plugin = await prisma.plugin.findFirst({
+      where: {
+        platform,
+        name: `${platform} PayHub Connector`,
+      },
+      include: { versions: true },
+    });
+
+    if (plugin) {
+      if (!plugin.versions.some((version) => version.version === "1.1.0")) {
+        await prisma.pluginVersion.create({
+          data: {
+            pluginId: plugin.id,
+            version: "1.1.0",
+            downloadUrl: `https://downloads.payhub.local/${platform.toLowerCase()}-1.1.0.zip`,
+            releaseNote: "Initial starter package",
+          },
+        });
+      }
+      continue;
+    }
+
     await prisma.plugin.create({
       data: {
         name: `${platform} PayHub Connector`,
@@ -209,13 +318,21 @@ async function main() {
     skipDuplicates: true,
   });
 
-  await prisma.auditLog.create({
-    data: {
+  const seedAuditLog = await prisma.auditLog.findFirst({
+    where: {
       action: "seed.completed",
       module: "system",
-      afterData: { apiKey: apiKey.apiKey },
     },
   });
+  if (!seedAuditLog) {
+    await prisma.auditLog.create({
+      data: {
+        action: "seed.completed",
+        module: "system",
+        afterData: { apiKey: apiKey.apiKey },
+      },
+    });
+  }
 }
 
 main()

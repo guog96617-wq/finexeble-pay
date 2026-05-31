@@ -216,6 +216,21 @@ corepack pnpm --filter api prisma:migrate
 corepack pnpm --filter api prisma:seed
 ```
 
+If the Railway API runtime does not have `pnpm`, use the production helper copied into the API image:
+
+```sh
+node scripts/railway-db.js check
+node scripts/railway-db.js status
+node scripts/railway-db.js migrate
+node scripts/railway-db.js seed
+```
+
+Or run migrate, seed, and demo-user verification together:
+
+```sh
+node scripts/railway-db.js all
+```
+
 Use seed only for demo environments. For production onboarding, create real merchants and secrets outside source control.
 
 ### 5. Railway Web

@@ -22,5 +22,7 @@ COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/api/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/prisma ./prisma
+COPY --from=build /app/apps/api/scripts ./scripts
+COPY --from=build /app/apps/api/package.json ./package.json
 EXPOSE 4000
-CMD ["node", "dist/src/main.js"]
+CMD ["node", "scripts/railway-start.js"]

@@ -11,7 +11,7 @@ import { ResponseInterceptor } from "./common/response.interceptor";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
-  const allowedOrigins = (config.get<string>("CORS_ORIGIN") ?? config.get<string>("FRONTEND_URL") ?? "http://localhost:3000")
+  const allowedOrigins = (config.get<string>("CORS_ORIGIN") ?? config.get<string>("FRONTEND_URL") ?? "http://localhost:3000,https://web-production-70ac7.up.railway.app")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);

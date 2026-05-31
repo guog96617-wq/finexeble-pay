@@ -6,15 +6,30 @@
   "scripts": {
     "dev": "corepack pnpm --parallel --filter api --filter web dev",
     "build": "corepack pnpm --recursive build",
+    "test": "corepack pnpm test:api && corepack pnpm test:e2e",
+    "test:api": "node tests/api/fxpay-smoke.mjs",
+    "test:e2e": "playwright test",
     "lint": "corepack pnpm --recursive lint",
     "db:generate": "corepack pnpm --filter api prisma:generate",
     "db:migrate": "corepack pnpm --filter api prisma:migrate",
     "db:migrate:dev": "corepack pnpm --filter api prisma:migrate:dev",
-    "db:seed": "corepack pnpm --filter api prisma:seed"
+    "db:seed": "corepack pnpm --filter api prisma:seed",
+    "deploy:web": "vercel --prod",
+    "deploy:api": "railway up --detach",
+    "verify:local": "corepack pnpm test",
+    "verify:prod": "cross-env API_BASE_URL=https://api-production-777b.up.railway.app WEB_BASE_URL=https://web-production-70ac7.up.railway.app corepack pnpm test"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.12.3"
+  "packageManager": "pnpm@9.12.3",
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.49.1",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "cross-env": "^7.0.3",
+    "globals": "^17.6.0"
+  }
 }
