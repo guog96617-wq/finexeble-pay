@@ -1,6 +1,21 @@
-# Global Payment Hub Starter V1.1
+# Finexeble FXpay V1.1
 
-A lightweight global payment aggregation operations platform starter.
+Finexeble / FXpay is a lightweight Global Payment Aggregator Platform demo. It shows the minimum payment operations loop for merchants, agents and administrators:
+
+Login -> Create order -> PSP routing and failover -> Payment callback -> Wallet credit -> Withdraw request -> Admin review -> Webhook logs.
+
+## Brand
+
+- Product name: Finexeble
+- Product short name: FXpay
+- Positioning: Global Payment Aggregator Platform
+- Style: light fintech SaaS, inspired by Stripe, Linear, Supabase Light, Mercury, Brex, Ramp and Coinbase Light dashboards.
+- Logo assets:
+  - `apps/web/public/brand/logo.png`
+  - `apps/web/public/brand/logo-icon.png`
+  - `apps/web/public/brand/og-image.png`
+  - `apps/web/public/favicon.ico`
+  - `apps/web/public/favicon.png`
 
 ## Project Structure
 
@@ -14,95 +29,85 @@ docker-compose.yml
 pnpm-workspace.yaml
 ```
 
-## Modules
-
-- Public SaaS website
-- Super Admin console
-- Merchant center
-- Agent center
-- PSP supplier and channel management
-- Payment order creation with primary/backup routing
-- Wallet balance, ledger, withdrawal review
-- API keys, webhook configuration and logs
-- SDK and plugin center
-- Audit logging and security helpers
-
 ## Windows Quick Start
 
 Prerequisites:
 
 - Install Node.js 20 or newer.
-- Install Docker Desktop and make sure `docker compose version` works in PowerShell.
-- Use `corepack.cmd` on Windows if `pnpm` is not available directly.
+- Install Docker Desktop and keep it running.
+- Open PowerShell.
 
 First-time setup:
 
 ```powershell
 cd "C:\Users\lele\Desktop\AI项目\支付pay"
-corepack.cmd pnpm --version
 corepack.cmd pnpm install
 Copy-Item .env.example .env -Force
 Copy-Item apps\api\.env.example apps\api\.env -Force
-```
-
-Start infrastructure:
-
-```powershell
 docker compose up postgres redis -d
-```
-
-Prepare database:
-
-```powershell
 corepack.cmd pnpm db:generate
 corepack.cmd pnpm db:migrate
 corepack.cmd pnpm db:seed
 ```
 
-Start apps locally:
+Start API and Web locally:
 
 ```powershell
 corepack.cmd pnpm --filter api dev
 corepack.cmd pnpm --filter web dev
 ```
 
-Local URLs:
+Open:
 
 - Web: `http://localhost:3000`
+- Login: `http://localhost:3000/login`
 - API: `http://localhost:4000/api`
 - Swagger: `http://localhost:4000/docs`
 
-Docker Compose full stack:
+## Docker Full Stack
 
 ```powershell
 docker compose up --build
 ```
 
-If Docker on Windows reports a BuildKit/gRPC session error, use classic build mode:
+If Docker on Windows reports a BuildKit or gRPC session error:
 
 ```powershell
 $env:DOCKER_BUILDKIT="0"
 docker compose up --build
 ```
 
-Docker URLs:
-
-- Web: `http://localhost:3000`
-- API: `http://localhost:4000/api`
-- Swagger: `http://localhost:4000/docs`
-- Nginx gateway: `http://localhost:8080`
-
 ## Demo Accounts
 
 ```text
 Super Admin: admin@payhub.local / Admin123!
-Agent Admin: agent@payhub.local / Agent123!
-Merchant Admin: merchant@payhub.local / Merchant123!
+Merchant:    merchant@payhub.local / Merchant123!
+Agent:       agent@payhub.local / Agent123!
 ```
+
+Role redirects:
+
+- `SUPER_ADMIN` -> `/admin`
+- `MERCHANT_ADMIN` -> `/merchant`
+- `AGENT_ADMIN` -> `/agent`
+
+## Core Test Flow
+
+1. Open `http://localhost:3000/login`.
+2. Login as merchant and confirm it redirects to `/merchant`.
+3. Create a merchant order from Merchant Center.
+4. Create a signed payment through `POST /api/v1/payments/create`.
+5. Confirm payment attempts show primary failure and backup success.
+6. Trigger `POST /api/webhooks/payment/notify` to simulate payment success.
+7. Confirm merchant wallet balance increases.
+8. Submit a withdraw request from Merchant Center.
+9. Login as admin and review the withdraw request.
+10. Click approve, then mark as paid.
+11. Review webhook logs in Admin Console.
 
 ## API Signature
 
-Merchant API requests should include:
+Merchant API requests include:
 
 ```text
 X-API-KEY
@@ -117,20 +122,20 @@ Signature payload:
 HMAC_SHA256(apiSecret, timestamp + nonce + body)
 ```
 
-Create payment test data:
+Demo credentials:
 
 ```text
 API key: pk_demo_global_shop
 API secret: sk_demo_global_shop_secret
 ```
 
-Create a signed order request to:
+Create payment endpoint:
 
 ```http
 POST http://localhost:4000/api/v1/payments/create
 ```
 
-with body:
+Example body:
 
 ```json
 {
@@ -141,25 +146,14 @@ with body:
 }
 ```
 
-## Verification Checklist
-
-Run these after dependencies are installed:
+## Verification
 
 ```powershell
-corepack.cmd pnpm --filter api build
 corepack.cmd pnpm --filter web build
+corepack.cmd pnpm --filter api build
 corepack.cmd pnpm --filter api prisma:validate
-docker compose version
-docker compose up postgres redis -d
-corepack.cmd pnpm db:migrate
-corepack.cmd pnpm db:seed
-corepack.cmd pnpm --filter api dev
-corepack.cmd pnpm --filter web dev
+docker compose ps
 ```
-
-If `pnpm db:migrate`, `pnpm db:seed`, login, or order creation fails with `Can't reach database server at localhost:5432`, PostgreSQL is not running yet. Start Docker Desktop, then run `docker compose up postgres redis -d`.
-
-If `docker` is not recognized, install Docker Desktop or add Docker to PATH, then reopen PowerShell.
 
 ## Notes
 

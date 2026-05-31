@@ -6,7 +6,8 @@ export default function AgentApplyPage() {
     <main className="min-h-screen bg-ink">
       <Nav />
       <section className="px-5 py-16">
-        <h1 className="mb-8 text-center text-4xl font-black">Agent Application</h1>
+        <p className="text-center text-sm font-bold uppercase tracking-[.18em] text-cyan">Agent Program</p>
+        <h1 className="mx-auto mb-8 mt-4 max-w-3xl text-center text-5xl font-black leading-tight text-slate-950">Bring merchants into a modern payment network.</h1>
         <ApplyForm type="Agent" />
       </section>
     </main>

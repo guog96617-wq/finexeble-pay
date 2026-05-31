@@ -1,11 +1,18 @@
-export function DataTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
+import { EmptyState } from "./EmptyState";
+
+export function DataTable({ columns, rows, empty = "No records found." }: { columns: string[]; rows: React.ReactNode[][]; empty?: string }) {
+  if (rows.length === 0) {
+    return <EmptyState title={empty} text="Try adjusting filters or create a new record from the action panel." />;
+  }
+
   return (
-    <div className="surface overflow-hidden">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="bg-[#0f2745] text-slate-300">
+    <div className="overflow-hidden rounded-card border border-line bg-white shadow-card">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+        <thead className="bg-slate-50/90 text-slate-600">
           <tr>
             {columns.map((column) => (
-              <th key={column} className="px-4 py-3 font-semibold">
+              <th key={column} className="whitespace-nowrap px-4 py-3 font-bold">
                 {column}
               </th>
             ))}
@@ -13,9 +20,9 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: string[]
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.join("-")} className="border-t border-line">
-              {row.map((cell) => (
-                <td key={cell} className="px-4 py-3 text-slate-200">
+            <tr key={row.map(String).join("-")} className="border-t border-line transition hover:bg-blue-50/40">
+              {row.map((cell, index) => (
+              <td key={`${index}-${String(cell)}`} className="whitespace-nowrap px-4 py-3 text-slate-700">
                   {cell}
                 </td>
               ))}
@@ -23,6 +30,7 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: string[]
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

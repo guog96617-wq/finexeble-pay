@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { PaymentMethod, Prisma, WithdrawStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -108,7 +108,7 @@ export class CoreService {
   }
 
   listOrders() {
-    return this.prisma.order.findMany({ include: { merchant: true, channel: true }, orderBy: { createdAt: "desc" } });
+    return this.prisma.order.findMany({ include: { merchant: true, channel: true, attempts: { include: { channel: true } } }, orderBy: { createdAt: "desc" } });
   }
 
   getOrder(id: string) {
@@ -134,7 +134,15 @@ export class CoreService {
         throw new Error("Wallet not found");
       }
 
-      if (status === "REJECTED" && withdraw.status !== "REJECTED") {
+      if (withdraw.status === "PAID" || withdraw.status === "REJECTED") {
+        throw new BadRequestException("Withdraw is already finalized");
+      }
+
+      if (status === "PAID" && withdraw.status !== "APPROVED") {
+        throw new BadRequestException("Withdraw must be approved before paid");
+      }
+
+      if (status === "REJECTED") {
         const updatedWallet = await tx.wallet.update({
           where: { id: wallet.id },
           data: {
@@ -156,7 +164,7 @@ export class CoreService {
         });
       }
 
-      if (status === "PAID" && withdraw.status !== "PAID") {
+      if (status === "PAID") {
         const updatedWallet = await tx.wallet.update({
           where: { id: wallet.id },
           data: {

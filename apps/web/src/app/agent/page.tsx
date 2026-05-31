@@ -1,6 +1,8 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
 import { MetricCard } from "@/components/MetricCard";
+import { SearchInput } from "@/components/SearchInput";
+import { StatusBadge } from "@/components/StatusBadge";
 import { apiGet, money } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +41,7 @@ export default async function AgentPage() {
   ];
   const merchantRows = merchants.map((merchant) => [
     merchant.name,
-    merchant.status,
+    <StatusBadge key={`${merchant.name}-status`} status={merchant.status} />,
     money(merchant.wallet?.availableBalance, merchant.wallet?.currency ?? "USD"),
     "-",
   ]);
@@ -51,21 +53,32 @@ export default async function AgentPage() {
   ]);
 
   return (
-    <DashboardShell title="Agent Center">
+    <DashboardShell title="Agent Center" role="Agent Admin" nav={[["Dashboard", "#dashboard"], ["My Merchants", "#merchants"], ["Order Stats", "#orders"], ["Commission", "#commissions"], ["Account", "#account"]]}>
       <section className="grid-fit">
         {agentStats.map((stat) => (
           <MetricCard key={stat.label} {...stat} />
         ))}
       </section>
       <section className="mt-8 grid gap-8 xl:grid-cols-2">
-        <div>
-          <h2 className="mb-3 text-lg font-black">My Merchants</h2>
+        <div id="merchants">
+          <h2 className="mb-3 text-lg font-black text-slate-950">My Merchants</h2>
+          <div className="mb-3">
+            <SearchInput placeholder="Search merchants" />
+          </div>
           <DataTable columns={["Merchant", "Status", "Available", "Orders"]} rows={merchantRows} />
         </div>
-        <div>
-          <h2 className="mb-3 text-lg font-black">Commission Ledger</h2>
+        <div id="commissions">
+          <h2 className="mb-3 text-lg font-black text-slate-950">Commission Ledger</h2>
           <DataTable columns={["Order", "Amount", "Rate", "Commission"]} rows={commissionRows} />
         </div>
+      </section>
+      <section id="orders" className="mt-8 surface p-5">
+        <h2 className="text-lg font-black text-slate-950">Order Statistics</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">Agent order lookup and conversion reporting placeholder using the existing commission and merchant data.</p>
+      </section>
+      <section id="account" className="mt-8 surface p-5">
+        <h2 className="text-lg font-black text-slate-950">Account Center</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">Agent profile, payout setup and contact preferences can be presented here during demos.</p>
       </section>
     </DashboardShell>
   );
