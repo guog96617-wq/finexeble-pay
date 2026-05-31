@@ -9,6 +9,7 @@
     "lint": "corepack pnpm --recursive lint",
     "db:generate": "corepack pnpm --filter api prisma:generate",
     "db:migrate": "corepack pnpm --filter api prisma:migrate",
+    "db:migrate:dev": "corepack pnpm --filter api prisma:migrate:dev",
     "db:seed": "corepack pnpm --filter api prisma:seed"
   },
   "engines": {

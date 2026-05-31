@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import * as argon2 from "argon2";
 
 const prisma = new PrismaClient();
+const demoApiSecret = process.env.DEMO_API_SECRET ?? "local-demo-api-secret-change-before-production";
 
 async function main() {
   const passwordHash = await argon2.hash("Admin123!");
@@ -120,7 +121,7 @@ async function main() {
     create: {
       merchantId: merchant.id,
       apiKey: "pk_demo_global_shop",
-      apiSecretHash: "sk_demo_global_shop_secret",
+      apiSecretHash: demoApiSecret,
       status: "ACTIVE",
     },
   });

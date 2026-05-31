@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { BrandLogo } from "./BrandLogo";
 import { Toast } from "./Toast";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 const roleHome: Record<string, string> = {
   SUPER_ADMIN: "/admin",

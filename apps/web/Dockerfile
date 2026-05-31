@@ -9,6 +9,10 @@ RUN pnpm install --filter web... --frozen-lockfile=false
 FROM node:20-alpine AS build
 WORKDIR /app
 RUN corepack enable
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ARG API_BASE_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV API_BASE_URL=$API_BASE_URL
 COPY --from=deps /root/.cache /root/.cache
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
@@ -18,6 +22,8 @@ RUN pnpm --filter web build
 FROM node:20-alpine
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV API_BASE_URL=http://localhost:4000
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/web/node_modules ./node_modules
 COPY --from=build /app/apps/web/.next ./.next

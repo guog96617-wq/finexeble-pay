@@ -1,4 +1,4 @@
-# Finexeble FXpay V1.1
+# Finexeble FXpay V1.2
 
 Finexeble / FXpay is a lightweight Global Payment Aggregator Platform demo. It shows the minimum payment operations loop for merchants, agents and administrators:
 
@@ -27,6 +27,7 @@ infra/
   nginx/    Reverse proxy config
 docker-compose.yml
 pnpm-workspace.yaml
+railway.toml
 ```
 
 ## Windows Quick Start
@@ -122,12 +123,13 @@ Signature payload:
 HMAC_SHA256(apiSecret, timestamp + nonce + body)
 ```
 
-Demo credentials:
+Demo API key:
 
 ```text
-API key: pk_demo_global_shop
-API secret: sk_demo_global_shop_secret
+pk_demo_global_shop
 ```
+
+The API secret is intentionally not printed in the README or UI. Set `DEMO_API_SECRET` in your local `.env` before running seed data, then use that value for signed local API tests.
 
 Create payment endpoint:
 
@@ -145,6 +147,115 @@ Example body:
   "customerEmail": "buyer@example.com"
 }
 ```
+
+## Public Deployment Guide
+
+This repo is prepared for a split deployment:
+
+- GitHub: source repository
+- Neon PostgreSQL: production Postgres
+- Upstash Redis: production Redis
+- Railway API: NestJS API from `apps/api/Dockerfile`
+- Vercel Web: Next.js web app from `apps/web`
+
+### 1. GitHub
+
+Push the repository to GitHub. Do not commit `.env`, `node_modules`, `.next`, `dist`, or database volumes. These are already ignored.
+
+### 2. Neon PostgreSQL
+
+Create a Neon project and copy the pooled or direct PostgreSQL connection string.
+
+Use it as:
+
+```text
+DATABASE_URL=postgresql://...
+```
+
+### 3. Upstash Redis
+
+Create an Upstash Redis database and copy the Redis URL.
+
+Use it as:
+
+```text
+REDIS_URL=rediss://...
+```
+
+### 4. Railway API
+
+Create a Railway service from the GitHub repository.
+
+Recommended Railway settings:
+
+```text
+Root Directory: repository root
+Dockerfile Path: apps/api/Dockerfile
+Config file: railway.toml
+```
+
+Required Railway environment variables:
+
+```text
+NODE_ENV=production
+PORT=4000
+DATABASE_URL=postgresql://...
+REDIS_URL=rediss://...
+JWT_SECRET=<strong random secret, 32+ characters>
+FRONTEND_URL=https://your-vercel-domain.vercel.app
+CORS_ORIGIN=https://your-vercel-domain.vercel.app
+DEMO_API_SECRET=<only if seeding demo data>
+```
+
+Run production database commands from a secure shell or Railway job:
+
+```powershell
+corepack pnpm --filter api prisma:generate
+corepack pnpm --filter api prisma:migrate
+corepack pnpm --filter api prisma:seed
+```
+
+Use seed only for demo environments. For production onboarding, create real merchants and secrets outside source control.
+
+### 5. Vercel Web
+
+Create a Vercel project from the same GitHub repository.
+
+Recommended Vercel settings:
+
+```text
+Root Directory: apps/web
+Framework Preset: Next.js
+Install Command: cd ../.. && corepack enable && pnpm install --frozen-lockfile=false --filter web...
+Build Command: cd ../.. && corepack enable && pnpm --filter web build
+Output Directory: .next
+```
+
+These settings are also captured in `apps/web/vercel.json`.
+
+Required Vercel environment variables:
+
+```text
+NEXT_PUBLIC_API_URL=https://your-railway-api-domain.up.railway.app
+```
+
+Optional server-side API override:
+
+```text
+API_BASE_URL=https://your-railway-api-domain.up.railway.app
+```
+
+### 6. Deployment Verification
+
+After deploy, verify:
+
+- Web: `https://your-vercel-domain.vercel.app`
+- Login: `https://your-vercel-domain.vercel.app/login`
+- Admin: `https://your-vercel-domain.vercel.app/admin`
+- Merchant: `https://your-vercel-domain.vercel.app/merchant`
+- Agent: `https://your-vercel-domain.vercel.app/agent`
+- API: `https://your-railway-api-domain.up.railway.app/api`
+- Swagger: `https://your-railway-api-domain.up.railway.app/docs`
 
 ## Verification
 

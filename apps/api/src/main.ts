@@ -11,9 +11,16 @@ import { ResponseInterceptor } from "./common/response.interceptor";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  const allowedOrigins = (config.get<string>("CORS_ORIGIN") ?? config.get<string>("FRONTEND_URL") ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   app.setGlobalPrefix("api");
-  app.enableCors();
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+  });
   app.use(helmet());
   app.use(rateLimitMiddleware);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -28,7 +35,8 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup("docs", app, SwaggerModule.createDocument(app, swaggerConfig));
 
-  await app.listen(config.get<number>("API_PORT", 4000));
+  const port = Number(config.get<string>("PORT") ?? config.get<string>("API_PORT") ?? 4000);
+  await app.listen(port);
 }
 
 void bootstrap();

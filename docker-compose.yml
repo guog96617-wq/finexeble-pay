@@ -24,7 +24,11 @@ services:
     environment:
       DATABASE_URL: postgresql://payhub:payhub@postgres:5432/payhub?schema=public
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: change-me-in-production
+      JWT_SECRET: local-dev-jwt-secret-change-before-production-32chars
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000,http://localhost:8080
+      DEMO_API_SECRET: local-demo-api-secret-change-before-production
+      PORT: 4000
       API_PORT: 4000
     depends_on:
       - postgres
@@ -36,9 +40,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        API_BASE_URL: http://api:4000
     environment:
       API_BASE_URL: http://api:4000
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
     depends_on:
       - api
     ports:
