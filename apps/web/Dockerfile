@@ -1,12 +1,12 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 COPY package.json ./
 RUN pnpm install --frozen-lockfile=false
 
 FROM node:20-alpine AS build
 WORKDIR /app
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 ARG NEXT_PUBLIC_API_URL=https://api-production-777b.up.railway.app
 ARG API_BASE_URL=https://api-production-777b.up.railway.app
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
