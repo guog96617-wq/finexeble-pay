@@ -4,5 +4,6 @@ apps/*/dist
 apps/web/.next
 .env
 .env.local
+.env.*
 *.log
 .git
