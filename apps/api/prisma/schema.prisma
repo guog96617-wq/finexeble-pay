@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  AGENT_ADMIN
+  MERCHANT_ADMIN
+}
+
+enum EntityStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum SupplierStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PaymentMethod {
+  CARD
+  LOCAL_PAYMENT
+  BANK_TRANSFER
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum AttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum WalletTransactionType {
+  PAYMENT_IN
+  REFUND_OUT
+  FEE_OUT
+  WITHDRAW_FREEZE
+  WITHDRAW_SUCCESS
+  WITHDRAW_FAILED
+  ADJUSTMENT
+}
+
+enum WithdrawStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum PluginPlatform {
+  SHOPIFY
+  WOOCOMMERCE
+  SHOPLINE
+  MAGENTO
+  OPENCART
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         UserRole
+  merchantId   String?   @map("merchant_id")
+  agentId      String?   @map("agent_id")
+  isMfaEnabled Boolean   @default(false) @map("is_mfa_enabled")
+  mfaSecret    String?   @map("mfa_secret")
+  status       EntityStatus @default(ACTIVE)
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id])
+  agent    Agent?    @relation(fields: [agentId], references: [id])
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Agent {
+  id             String   @id @default(cuid())
+  name           String
+  contactName    String   @map("contact_name")
+  email          String   @unique
+  phone          String?
+  commissionRate Decimal  @default(0) @map("commission_rate") @db.Decimal(8, 4)
+  status         EntityStatus @default(PENDING)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  merchants Merchant[]
+  users     User[]
+
+  @@map("agents")
+}
+
+model Merchant {
+  id          String   @id @default(cuid())
+  agentId     String?  @map("agent_id")
+  name        String
+  contactName String   @map("contact_name")
+  email       String   @unique
+  phone       String?
+  country     String?
+  website     String?
+  status      EntityStatus @default(PENDING)
+  feeRate     Decimal  @default(0.029) @map("fee_rate") @db.Decimal(8, 4)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  agent              Agent?              @relation(fields: [agentId], references: [id])
+  users              User[]
+  orders             Order[]
+  refunds            Refund[]
+  wallet             Wallet?
+  walletTransactions WalletTransaction[]
+  withdraws          Withdraw[]
+  apiKeys            ApiKey[]
+  webhooks           Webhook[]
+  webhookLogs        WebhookLog[]
+
+  @@map("merchants")
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  country     String?
+  contactName String?  @map("contact_name")
+  email       String?
+  apiBaseUrl  String   @map("api_base_url")
+  status      SupplierStatus @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  channels Channel[]
+
+  @@map("suppliers")
+}
+
+model Channel {
+  id            String   @id @default(cuid())
+  supplierId    String   @map("supplier_id")
+  name          String
+  paymentMethod PaymentMethod @map("payment_method")
+  country       String?
+  currency      String
+  feeRate       Decimal  @default(0.02) @map("fee_rate") @db.Decimal(8, 4)
+  priority      Int      @default(100)
+  isPrimary     Boolean  @default(false) @map("is_primary")
+  isBackup      Boolean  @default(false) @map("is_backup")
+  status        SupplierStatus @default(ACTIVE)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  orders   Order[]
+  attempts PaymentAttempt[]
+
+  @@map("channels")
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  merchantId      String   @map("merchant_id")
+  channelId       String?  @map("channel_id")
+  orderNo         String   @unique @map("order_no")
+  merchantOrderNo String   @map("merchant_order_no")
+  amount          Decimal  @db.Decimal(18, 2)
+  currency        String
+  feeAmount       Decimal  @default(0) @map("fee_amount") @db.Decimal(18, 2)
+  netAmount       Decimal  @default(0) @map("net_amount") @db.Decimal(18, 2)
+  status          OrderStatus @default(PENDING)
+  paymentUrl      String?  @map("payment_url")
+  customerEmail   String?  @map("customer_email")
+  customerIp      String?  @map("customer_ip")
+  paidAt          DateTime? @map("paid_at")
+  failedReason    String?  @map("failed_reason")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  channel  Channel? @relation(fields: [channelId], references: [id])
+  attempts PaymentAttempt[]
+  refunds  Refund[]
+  webhookLogs WebhookLog[]
+
+  @@map("orders")
+}
+
+model PaymentAttempt {
+  id              String   @id @default(cuid())
+  orderId         String   @map("order_id")
+  channelId       String   @map("channel_id")
+  attemptNo       Int      @map("attempt_no")
+  status          AttemptStatus
+  requestPayload  Json?    @map("request_payload")
+  responsePayload Json?    @map("response_payload")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@map("payment_attempts")
+}
+
+model Refund {
+  id         String   @id @default(cuid())
+  orderId    String   @map("order_id")
+  merchantId String   @map("merchant_id")
+  refundNo   String   @unique @map("refund_no")
+  amount     Decimal  @db.Decimal(18, 2)
+  reason     String?
+  status     RefundStatus @default(PENDING)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@map("refunds")
+}
+
+model Wallet {
+  id               String   @id @default(cuid())
+  merchantId       String   @unique @map("merchant_id")
+  balance          Decimal  @default(0) @db.Decimal(18, 2)
+  availableBalance Decimal  @default(0) @map("available_balance") @db.Decimal(18, 2)
+  frozenBalance    Decimal  @default(0) @map("frozen_balance") @db.Decimal(18, 2)
+  currency         String   @default("USD")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  merchant     Merchant @relation(fields: [merchantId], references: [id])
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id            String   @id @default(cuid())
+  walletId      String   @map("wallet_id")
+  merchantId    String   @map("merchant_id")
+  type          WalletTransactionType
+  amount        Decimal  @db.Decimal(18, 2)
+  balanceAfter  Decimal  @map("balance_after") @db.Decimal(18, 2)
+  referenceType String?  @map("reference_type")
+  referenceId   String?  @map("reference_id")
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  wallet   Wallet   @relation(fields: [walletId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@map("wallet_transactions")
+}
+
+model Withdraw {
+  id          String   @id @default(cuid())
+  merchantId  String   @map("merchant_id")
+  withdrawNo  String   @unique @map("withdraw_no")
+  amount      Decimal  @db.Decimal(18, 2)
+  currency    String
+  bankName    String   @map("bank_name")
+  bankAccount String   @map("bank_account")
+  accountName String   @map("account_name")
+  status      WithdrawStatus @default(PENDING)
+  reviewedBy  String?  @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@map("withdraws")
+}
+
+model ApiKey {
+  id            String   @id @default(cuid())
+  merchantId    String   @map("merchant_id")
+  apiKey        String   @unique @map("api_key")
+  apiSecretHash String   @map("api_secret_hash")
+  status        EntityStatus @default(ACTIVE)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@map("api_keys")
+}
+
+model Webhook {
+  id         String   @id @default(cuid())
+  merchantId String   @map("merchant_id")
+  url        String
+  secret     String
+  status     EntityStatus @default(ACTIVE)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id              String   @id @default(cuid())
+  merchantId      String   @map("merchant_id")
+  orderId         String?  @map("order_id")
+  url             String
+  requestPayload  Json?    @map("request_payload")
+  responseStatus  Int?     @map("response_status")
+  responseBody    String?  @map("response_body")
+  status          AttemptStatus
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  order    Order?   @relation(fields: [orderId], references: [id])
+
+  @@map("webhook_logs")
+}
+
+model Plugin {
+  id          String   @id @default(cuid())
+  name        String
+  platform    PluginPlatform
+  description String?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  versions PluginVersion[]
+
+  @@map("plugins")
+}
+
+model PluginVersion {
+  id          String   @id @default(cuid())
+  pluginId    String   @map("plugin_id")
+  version     String
+  downloadUrl String   @map("download_url")
+  releaseNote String?  @map("release_note")
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  plugin Plugin @relation(fields: [pluginId], references: [id])
+
+  @@map("plugin_versions")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  action    String
+  module    String
+  ip        String?
+  userAgent String?  @map("user_agent")
+  beforeData Json?   @map("before_data")
+  afterData  Json?   @map("after_data")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  configKey   String   @unique @map("config_key")
+  configValue String   @map("config_value")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
