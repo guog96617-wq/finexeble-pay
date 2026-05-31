@@ -27,10 +27,11 @@ ENV PORT=3000
 ENV NIXPACKS_PORT=3000
 ENV NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV API_BASE_URL=http://localhost:4000
+ENV PATH=/app/apps/web/node_modules/.bin:/app/node_modules/.bin:$PATH
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/web/node_modules ./node_modules
 COPY --from=build /app/apps/web/.next ./.next
 COPY --from=build /app/apps/web/public ./public
 COPY --from=build /app/apps/web/package.json ./package.json
 EXPOSE ${PORT}
-CMD ["sh", "-c", "exec node node_modules/next/dist/bin/next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}"]
+CMD ["sh", "-c", "exec node_modules/.bin/next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}"]
