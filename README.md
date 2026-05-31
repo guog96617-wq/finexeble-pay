@@ -227,10 +227,17 @@ Dockerfile Path: apps/web/Dockerfile
 Healthcheck Path: /
 ```
 
+If the Railway Web service uses `apps/web` as its Root Directory, Railway should use `apps/web/railway.toml` instead:
+
+```text
+Dockerfile Path: Dockerfile
+Healthcheck Path: /
+```
+
 The web Docker image starts Next.js with:
 
 ```sh
-next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}
+node_modules/.bin/next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}
 ```
 
 Railway injects `PORT` at runtime. `HOSTNAME` should remain `0.0.0.0` so public networking can reach the container.
