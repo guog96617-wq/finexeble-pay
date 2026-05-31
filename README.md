@@ -156,7 +156,7 @@ This repo is prepared for a split deployment:
 - Neon PostgreSQL: production Postgres
 - Upstash Redis: production Redis
 - Railway API: NestJS API from `apps/api/Dockerfile`
-- Railway Web: optional Next.js web service from root `railway.toml`
+- Railway Web: optional Next.js web service from `apps/web/railway.toml`
 - Vercel Web: Next.js web app from `apps/web`
 
 ### 1. GitHub
@@ -192,7 +192,7 @@ Recommended Railway settings:
 ```text
 Root Directory: repository root
 Dockerfile Path: apps/api/Dockerfile
-Config file: do not use root railway.toml for the API service; it is reserved for Railway Web.
+Config file: use the root `railway.toml` for the API service.
 ```
 
 Required Railway environment variables:
@@ -235,17 +235,17 @@ Use seed only for demo environments. For production onboarding, create real merc
 
 ### 5. Railway Web
 
-The root `railway.toml` is configured for a Railway Web service:
-
-```text
-Dockerfile Path: apps/web/Dockerfile
-Healthcheck Path: /
-```
-
-If the Railway Web service uses `apps/web` as its Root Directory, Railway should use `apps/web/railway.toml` instead:
+The root `railway.toml` is configured for the Railway API service. If the Railway Web service uses `apps/web` as its Root Directory, Railway should use `apps/web/railway.toml`:
 
 ```text
 Dockerfile Path: Dockerfile
+Healthcheck Path: /
+```
+
+If the Railway Web service uses the repository root as its Root Directory, do not use the root `railway.toml`; configure the Web service explicitly:
+
+```text
+Dockerfile Path: apps/web/Dockerfile
 Healthcheck Path: /
 ```
 
