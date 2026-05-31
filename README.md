@@ -156,6 +156,7 @@ This repo is prepared for a split deployment:
 - Neon PostgreSQL: production Postgres
 - Upstash Redis: production Redis
 - Railway API: NestJS API from `apps/api/Dockerfile`
+- Railway Web: optional Next.js web service from root `railway.toml`
 - Vercel Web: Next.js web app from `apps/web`
 
 ### 1. GitHub
@@ -191,7 +192,7 @@ Recommended Railway settings:
 ```text
 Root Directory: repository root
 Dockerfile Path: apps/api/Dockerfile
-Config file: railway.toml
+Config file: do not use root railway.toml for the API service; it is reserved for Railway Web.
 ```
 
 Required Railway environment variables:
@@ -217,7 +218,34 @@ corepack pnpm --filter api prisma:seed
 
 Use seed only for demo environments. For production onboarding, create real merchants and secrets outside source control.
 
-### 5. Vercel Web
+### 5. Railway Web
+
+The root `railway.toml` is configured for a Railway Web service:
+
+```text
+Dockerfile Path: apps/web/Dockerfile
+Healthcheck Path: /
+```
+
+The web Docker image starts Next.js with:
+
+```sh
+next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}
+```
+
+Railway injects `PORT` at runtime. `HOSTNAME` should remain `0.0.0.0` so public networking can reach the container.
+
+Required Railway Web environment variables:
+
+```text
+NEXT_PUBLIC_API_URL=https://your-railway-api-domain.up.railway.app
+API_BASE_URL=https://your-railway-api-domain.up.railway.app
+HOSTNAME=0.0.0.0
+```
+
+Do not set a custom start command for the Railway Web service. Let Docker use the `CMD` from `apps/web/Dockerfile`.
+
+### 6. Vercel Web
 
 Create a Vercel project from the same GitHub repository.
 
@@ -245,7 +273,7 @@ Optional server-side API override:
 API_BASE_URL=https://your-railway-api-domain.up.railway.app
 ```
 
-### 6. Deployment Verification
+### 7. Deployment Verification
 
 After deploy, verify:
 

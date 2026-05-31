@@ -23,6 +23,8 @@ FROM node:20-alpine
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+ENV NIXPACKS_PORT=3000
 ENV NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV API_BASE_URL=http://localhost:4000
 COPY --from=build /app/node_modules /app/node_modules
@@ -30,5 +32,5 @@ COPY --from=build /app/apps/web/node_modules ./node_modules
 COPY --from=build /app/apps/web/.next ./.next
 COPY --from=build /app/apps/web/public ./public
 COPY --from=build /app/apps/web/package.json ./package.json
-EXPOSE 3000
-CMD ["sh", "-c", "node node_modules/next/dist/bin/next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}"]
+EXPOSE ${PORT}
+CMD ["sh", "-c", "exec node node_modules/next/dist/bin/next start -H ${HOSTNAME:-0.0.0.0} -p ${PORT:-3000}"]
