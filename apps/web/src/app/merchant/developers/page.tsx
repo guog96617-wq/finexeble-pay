@@ -10,8 +10,13 @@ type ApiKey = { apiKey: string; status: string; createdAt: string };
 export default async function MerchantDevelopersPage() {
   const apiKeys = await apiGet<ApiKey[]>("/api/merchant/api-keys", []);
   return (
-    <DashboardShell requiredRole="MERCHANT_ADMIN" title="API Developer UX" role="Merchant Admin">
-      <SectionHeader eyebrow="Developer UX" title="API Key / Developer UX" text="提供 Sandbox / Production 标签、一键复制、Curl、SDK、HMAC 和 Webhook 示例。" />
+    <DashboardShell requiredRole="MERCHANT_ADMIN" title="Developer Center" role="Merchant Admin">
+      <SectionHeader
+        eyebrow="Developer"
+        title="API Keys"
+        text="该页面只负责 API Key 管理。Webhook 请前往独立 Webhook 页面。"
+        status="ACTIVE"
+      />
       <ApiKeyPanel apiKeys={apiKeys} />
     </DashboardShell>
   );

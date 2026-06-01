@@ -22,16 +22,21 @@ const adminNav: NavItem[] = [
 ];
 
 const agentNav: NavItem[] = [
-  ["Dashboard", "/agent"],
-  { section: "商户运营", items: [["我的商户", "/agent#merchants"], ["商户 PSP 开关", "/agent/payment-methods"], ["商户费率设置", "/agent/merchant-fees"]] },
-  { section: "资金与收益", items: [["订单统计", "/agent#orders"], ["佣金/利润", "/agent#commissions"], ["提现规则", "/agent/merchant-fees#withdraw-rules"]] },
+  { section: "仪表台", items: [["Dashboard", "/agent"]] },
+  { section: "商户运营", items: [["我的商户", "/agent/merchants"], ["商户 PSP", "/agent/payment-methods"], ["商户费率", "/agent/merchant-fees"]] },
+  { section: "订单与交易", items: [["订单管理", "/agent/orders"], ["Checkout 订单", "/agent/checkout-orders"]] },
+  { section: "资金与收益", items: [["我的佣金", "/agent/commissions"], ["钱包", "/agent/wallet"], ["提现管理", "/agent/withdraws"]] },
+  { section: "开发者", items: [["API 文档", "/docs/api"]] },
+  { section: "账户与安全", items: [["个人设置", "/agent/settings"]] },
 ];
 
 const merchantNav: NavItem[] = [
-  ["Dashboard", "/merchant"],
-  { section: "收款运营", items: [["订单管理", "/merchant#orders"], ["创建订单", "/merchant#order-form"], ["我的支付方式", "/merchant/payment-methods"], ["Checkout 链接", "/merchant/payment-methods#checkout-help"]] },
-  { section: "资金管理", items: [["钱包余额", "/merchant/wallet"], ["提现申请", "/merchant#withdraws"], ["提现规则", "/merchant/payment-methods#withdraw-rule"]] },
-  { section: "开发者", items: [["API Key", "/merchant/developers"], ["Webhook 配置", "/merchant#webhook"], ["SDK 插件", "/merchant#sdk"]] },
+  { section: "仪表台", items: [["Dashboard", "/merchant"]] },
+  { section: "支付与订单", items: [["创建订单", "/merchant/create-order"], ["订单管理", "/merchant/orders"], ["Checkout 订单", "/merchant/checkout-orders"]] },
+  { section: "资金中心", items: [["钱包", "/merchant/wallet"], ["提现", "/merchant/withdraws"], ["提现记录", "/merchant/withdraw-records"]] },
+  { section: "支付方式", items: [["我的支付方式", "/merchant/payment-methods"], ["PSP / 通道状态", "/merchant/psp-status"]] },
+  { section: "开发者", items: [["API Keys", "/merchant/developers"], ["Webhook", "/merchant/webhooks"], ["API 文档", "/docs/api"]] },
+  { section: "账户", items: [["账户设置", "/merchant/settings"]] },
 ];
 
 function navForRole(requiredRole: UserRole) {
