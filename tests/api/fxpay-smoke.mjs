@@ -284,7 +284,7 @@ const withdraw = data(await check("12. 提现申请成功", () => request(apiBas
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
-    amount: "1.00",
+    amount: "10.00",
     currency: "USD",
     bankName: "Automation Bank",
     bankAccount: `AUTO${Date.now()}`,

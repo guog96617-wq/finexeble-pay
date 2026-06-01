@@ -295,7 +295,11 @@ async function main() {
 
   const apiKey = await prisma.apiKey.upsert({
     where: { apiKey: "pk_demo_global_shop" },
-    update: {},
+    update: {
+      merchantId: merchant.id,
+      apiSecretHash: demoApiSecret,
+      status: "ACTIVE",
+    },
     create: {
       merchantId: merchant.id,
       apiKey: "pk_demo_global_shop",
