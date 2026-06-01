@@ -27,6 +27,16 @@ export class CoreController {
     return this.core.getMerchant(id);
   }
 
+  @Get("merchants/:id/psp")
+  merchantPsp(@Param("id") id: string) {
+    return this.core.merchantPspStatus(id);
+  }
+
+  @Post("merchants/:merchantId/channels/:channelId")
+  upsertMerchantChannel(@Param("merchantId") merchantId: string, @Param("channelId") channelId: string, @Body() body: Record<string, unknown>) {
+    return this.core.upsertMerchantChannel(merchantId, channelId, body);
+  }
+
   @Patch("merchants/:id")
   updateMerchant(@Param("id") id: string, @Body() body: Record<string, unknown>) {
     return this.core.updateMerchant(id, body);
@@ -52,6 +62,21 @@ export class CoreController {
     return this.core.createSupplier(body);
   }
 
+  @Patch("suppliers/:id")
+  updateSupplier(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    return this.core.updateSupplier(id, body);
+  }
+
+  @Patch("suppliers/:id/enable")
+  enableSupplier(@Param("id") id: string) {
+    return this.core.setSupplierStatus(id, "ACTIVE");
+  }
+
+  @Patch("suppliers/:id/disable")
+  disableSupplier(@Param("id") id: string) {
+    return this.core.setSupplierStatus(id, "DISABLED");
+  }
+
   @Get("channels")
   channels() {
     return this.core.listChannels();
@@ -60,6 +85,56 @@ export class CoreController {
   @Post("channels")
   createChannel(@Body() body: Record<string, unknown>) {
     return this.core.createChannel(body);
+  }
+
+  @Patch("channels/:id")
+  updateChannel(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    return this.core.updateChannel(id, body);
+  }
+
+  @Patch("channels/:id/enable")
+  enableChannel(@Param("id") id: string) {
+    return this.core.updateChannel(id, { status: "ACTIVE" });
+  }
+
+  @Patch("channels/:id/disable")
+  disableChannel(@Param("id") id: string) {
+    return this.core.updateChannel(id, { status: "DISABLED" });
+  }
+
+  @Patch("channels/:id/primary")
+  setPrimaryChannel(@Param("id") id: string) {
+    return this.core.setGlobalChannelRole(id, "primary");
+  }
+
+  @Patch("channels/:id/backup")
+  setBackupChannel(@Param("id") id: string) {
+    return this.core.setGlobalChannelRole(id, "backup");
+  }
+
+  @Get("merchant-psp-status")
+  merchantPspStatus() {
+    return this.core.listMerchantPspStatus();
+  }
+
+  @Get("agent-fee-rules")
+  agentFeeRules() {
+    return this.core.listAgentFeeRules();
+  }
+
+  @Post("agents/:agentId/fee-rules")
+  upsertAgentFeeRule(@Param("agentId") agentId: string, @Body() body: Record<string, unknown>) {
+    return this.core.upsertAgentFeeRule(agentId, body);
+  }
+
+  @Get("withdraw-rules")
+  withdrawRules() {
+    return this.core.listWithdrawRules();
+  }
+
+  @Post("withdraw-rules")
+  upsertWithdrawRule(@Body() body: Record<string, unknown>) {
+    return this.core.upsertWithdrawRule(body);
   }
 
   @Get("orders")

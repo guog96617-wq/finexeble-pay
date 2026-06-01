@@ -19,11 +19,14 @@ type Dashboard = {
 };
 
 type Order = {
+  id: string;
   orderNo: string;
   merchantOrderNo: string;
   status: string;
   amount: string;
   currency: string;
+  paymentUrl?: string | null;
+  attempts?: { attemptNo: number; status: string; channel?: { name: string } | null }[];
 };
 
 type Wallet = {
@@ -69,7 +72,14 @@ export default async function MerchantPage() {
     { label: "Success Rate", value: `${dashboard.successRate}%`, tone: "success", caption: "Live" },
     { label: "Available Balance", value: money(dashboard.availableBalance, wallet?.currency ?? "USD"), tone: "warn" },
   ];
-  const orderRows = orders.map((order) => [order.orderNo, order.merchantOrderNo, <StatusBadge key={`${order.orderNo}-status`} status={order.status} />, money(order.amount, order.currency)]);
+  const orderRows = orders.map((order) => [
+    order.orderNo,
+    order.merchantOrderNo,
+    <StatusBadge key={`${order.orderNo}-status`} status={order.status} />,
+    money(order.amount, order.currency),
+    order.paymentUrl ? <a key={`${order.orderNo}-checkout`} className="font-bold text-brand" href={order.paymentUrl}>Open Checkout</a> : "-",
+    order.attempts?.map((attempt) => `${attempt.attemptNo}.${attempt.status}${attempt.channel?.name ? ` ${attempt.channel.name}` : ""}`).join(" / ") ?? "-",
+  ]);
   const withdrawRows = withdraws.map((withdraw) => [withdraw.withdrawNo, <StatusBadge key={`${withdraw.withdrawNo}-status`} status={withdraw.status} />, money(withdraw.amount, withdraw.currency)]);
 
   return (
@@ -85,7 +95,7 @@ export default async function MerchantPage() {
           <div className="mb-3">
             <SearchInput placeholder="Search orders" />
           </div>
-          <DataTable columns={["Order", "Merchant Order", "Status", "Amount"]} rows={orderRows} />
+          <DataTable columns={["Order", "Merchant Order", "Status", "Amount", "Checkout", "Payment Attempts"]} rows={orderRows} />
         </div>
         <div className="grid gap-4">
           <MerchantForms />

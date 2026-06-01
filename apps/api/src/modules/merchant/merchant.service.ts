@@ -33,26 +33,28 @@ export class MerchantService {
 
   async createManualOrder(body: Record<string, unknown>) {
     const merchant = await this.demoMerchant();
+    const orderNo = `P${new Date().getFullYear()}${nanoid(10).toUpperCase()}`;
     return this.prisma.order.create({
       data: {
         merchantId: merchant.id,
-        orderNo: `P${new Date().getFullYear()}${nanoid(10).toUpperCase()}`,
+        orderNo,
         merchantOrderNo: String(body.merchantOrderNo ?? nanoid(8)),
         amount: new Prisma.Decimal(String(body.amount ?? "0")),
         currency: String(body.currency ?? "USD"),
         customerEmail: body.customerEmail ? String(body.customerEmail) : undefined,
         status: "PENDING",
+        paymentUrl: `/checkout/${orderNo}`,
       },
     });
   }
 
   async orders() {
     const merchant = await this.demoMerchant();
-    return this.prisma.order.findMany({ where: { merchantId: merchant.id }, orderBy: { createdAt: "desc" } });
+    return this.prisma.order.findMany({ where: { merchantId: merchant.id }, include: { channel: true, attempts: { include: { channel: true } } }, orderBy: { createdAt: "desc" } });
   }
 
   order(id: string) {
-    return this.prisma.order.findUnique({ where: { id }, include: { attempts: true, refunds: true } });
+    return this.prisma.order.findUnique({ where: { id }, include: { attempts: { include: { channel: true } }, refunds: true, channel: true } });
   }
 
   async wallet() {
@@ -68,6 +70,15 @@ export class MerchantService {
   async createWithdraw(body: Record<string, unknown>) {
     const merchant = await this.demoMerchant();
     const amount = new Prisma.Decimal(String(body.amount));
+    const rule = await this.resolveWithdrawRule(merchant.id, merchant.agentId, String(body.currency ?? "USD"));
+    if (amount.lt(rule.minAmount)) {
+      throw new BadRequestException("WITHDRAW_AMOUNT_TOO_LOW");
+    }
+    if (amount.gt(rule.maxAmount)) {
+      throw new BadRequestException("WITHDRAW_AMOUNT_TOO_HIGH");
+    }
+    const feeAmount = amount.mul(rule.withdrawFeeRate).plus(rule.withdrawFixedFee);
+    const actualPayout = amount.sub(feeAmount);
     return this.prisma.$transaction(async (tx) => {
       const wallet = await tx.wallet.findUnique({ where: { merchantId: merchant.id } });
       if (!wallet || wallet.availableBalance.lt(amount)) {
@@ -86,6 +97,8 @@ export class MerchantService {
           merchantId: merchant.id,
           withdrawNo: `W${new Date().getFullYear()}${nanoid(10).toUpperCase()}`,
           amount,
+          feeAmount,
+          actualPayout,
           currency: String(body.currency ?? "USD"),
           bankName: String(body.bankName),
           bankAccount: String(body.bankAccount),
@@ -101,7 +114,7 @@ export class MerchantService {
           balanceAfter: updatedWallet.availableBalance,
           referenceType: "WITHDRAW",
           referenceId: withdraw.id,
-          description: `Withdraw requested ${withdraw.withdrawNo}`,
+          description: `Withdraw requested ${withdraw.withdrawNo}; fee ${feeAmount.toFixed(2)}; payout ${actualPayout.toFixed(2)}`,
         },
       });
       return withdraw;
@@ -111,6 +124,20 @@ export class MerchantService {
   async withdraws() {
     const merchant = await this.demoMerchant();
     return this.prisma.withdraw.findMany({ where: { merchantId: merchant.id }, orderBy: { createdAt: "desc" } });
+  }
+
+  async paymentMethods() {
+    const merchant = await this.demoMerchant();
+    const [merchantChannels, withdrawRule] = await Promise.all([
+      this.prisma.merchantChannel.findMany({ where: { merchantId: merchant.id, isEnabled: true }, include: { channel: { include: { supplier: true } } }, orderBy: [{ isPrimary: "desc" }, { isBackup: "desc" }] }),
+      this.resolveWithdrawRule(merchant.id, merchant.agentId, "USD"),
+    ]);
+    return { merchant, channels: merchantChannels, withdrawRule };
+  }
+
+  async withdrawRules() {
+    const merchant = await this.demoMerchant();
+    return this.resolveWithdrawRule(merchant.id, merchant.agentId, "USD");
   }
 
   async apiKeys() {
@@ -160,5 +187,28 @@ export class MerchantService {
       { language: "Java", package: "com.payhub:sdk", version: "1.1.0" },
       { language: "Python", package: "payhub-sdk", version: "1.1.0" },
     ];
+  }
+
+  private async resolveWithdrawRule(merchantId: string, agentId: string | null, currency: string) {
+    const merchantRule = await this.prisma.withdrawRule.findUnique({ where: { merchantId_currency: { merchantId, currency } } });
+    if (merchantRule) {
+      return merchantRule;
+    }
+    if (agentId) {
+      const agentRule = await this.prisma.withdrawRule.findUnique({ where: { agentId_currency: { agentId, currency } } });
+      if (agentRule) {
+        return agentRule;
+      }
+    }
+    const globalRule = await this.prisma.withdrawRule.findFirst({ where: { merchantId: null, agentId: null, currency, status: "ACTIVE" } });
+    if (globalRule) {
+      return globalRule;
+    }
+    return {
+      minAmount: new Prisma.Decimal("1"),
+      maxAmount: new Prisma.Decimal("10000"),
+      withdrawFeeRate: new Prisma.Decimal("0.01"),
+      withdrawFixedFee: new Prisma.Decimal("0"),
+    };
   }
 }

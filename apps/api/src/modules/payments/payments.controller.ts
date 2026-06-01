@@ -31,4 +31,14 @@ export class PaymentsController {
   pspNotify(@Body() body: { orderNo: string; status: "PAID" | "FAILED"; providerReference?: string }) {
     return this.payments.handlePspNotify(body);
   }
+
+  @Get("checkout/:orderNo")
+  checkout(@Param("orderNo") orderNo: string) {
+    return this.payments.getCheckout(orderNo);
+  }
+
+  @Post("checkout/:orderNo/pay")
+  payCheckout(@Param("orderNo") orderNo: string, @Body() body: { paymentMethod?: string; sandboxResult?: "success" | "failed" | "timeout" }) {
+    return this.payments.payCheckout(orderNo, body);
+  }
 }

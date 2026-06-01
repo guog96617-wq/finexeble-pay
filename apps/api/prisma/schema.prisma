@@ -29,6 +29,7 @@ enum PaymentMethod {
   CARD
   LOCAL_PAYMENT
   BANK_TRANSFER
+  SANDBOX_PAY
 }
 
 enum OrderStatus {
@@ -111,6 +112,8 @@ model Agent {
 
   merchants Merchant[]
   users     User[]
+  feeRules  AgentFeeRule[]
+  withdrawRules WithdrawRule[]
 
   @@map("agents")
 }
@@ -139,6 +142,8 @@ model Merchant {
   apiKeys            ApiKey[]
   webhooks           Webhook[]
   webhookLogs        WebhookLog[]
+  merchantChannels   MerchantChannel[]
+  withdrawRules      WithdrawRule[]
 
   @@map("merchants")
 }
@@ -177,6 +182,7 @@ model Channel {
   supplier Supplier @relation(fields: [supplierId], references: [id])
   orders   Order[]
   attempts PaymentAttempt[]
+  merchantChannels MerchantChannel[]
 
   @@map("channels")
 }
@@ -282,6 +288,8 @@ model Withdraw {
   merchantId  String   @map("merchant_id")
   withdrawNo  String   @unique @map("withdraw_no")
   amount      Decimal  @db.Decimal(18, 2)
+  feeAmount   Decimal  @default(0) @map("fee_amount") @db.Decimal(18, 2)
+  actualPayout Decimal @default(0) @map("actual_payout") @db.Decimal(18, 2)
   currency    String
   bankName    String   @map("bank_name")
   bankAccount String   @map("bank_account")
@@ -295,6 +303,70 @@ model Withdraw {
   merchant Merchant @relation(fields: [merchantId], references: [id])
 
   @@map("withdraws")
+}
+
+model MerchantChannel {
+  id                  String   @id @default(cuid())
+  merchantId          String   @map("merchant_id")
+  channelId           String   @map("channel_id")
+  isEnabled           Boolean  @default(true) @map("is_enabled")
+  isPrimary           Boolean  @default(false) @map("is_primary")
+  isBackup            Boolean  @default(false) @map("is_backup")
+  merchantFeeRate     Decimal  @default(0.029) @map("merchant_fee_rate") @db.Decimal(8, 4)
+  merchantFixedFee    Decimal  @default(0) @map("merchant_fixed_fee") @db.Decimal(18, 2)
+  pspCostRate         Decimal  @default(0.018) @map("psp_cost_rate") @db.Decimal(8, 4)
+  pspFixedFee         Decimal  @default(0) @map("psp_fixed_fee") @db.Decimal(18, 2)
+  agentCommissionRate Decimal  @default(0) @map("agent_commission_rate") @db.Decimal(8, 4)
+  minFee              Decimal  @default(0) @map("min_fee") @db.Decimal(18, 2)
+  maxFee              Decimal? @map("max_fee") @db.Decimal(18, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  channel  Channel  @relation(fields: [channelId], references: [id])
+
+  @@unique([merchantId, channelId])
+  @@map("merchant_channels")
+}
+
+model WithdrawRule {
+  id                  String   @id @default(cuid())
+  merchantId          String?  @map("merchant_id")
+  agentId             String?  @map("agent_id")
+  currency            String   @default("USD")
+  minAmount           Decimal  @default(1) @map("min_amount") @db.Decimal(18, 2)
+  maxAmount           Decimal  @default(10000) @map("max_amount") @db.Decimal(18, 2)
+  withdrawFeeRate     Decimal  @default(0.01) @map("withdraw_fee_rate") @db.Decimal(8, 4)
+  withdrawFixedFee    Decimal  @default(0) @map("withdraw_fixed_fee") @db.Decimal(18, 2)
+  settlementDays      Int      @default(1) @map("settlement_days")
+  requireManualReview Boolean  @default(true) @map("require_manual_review")
+  status              EntityStatus @default(ACTIVE)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id])
+  agent    Agent?    @relation(fields: [agentId], references: [id])
+
+  @@unique([merchantId, currency])
+  @@unique([agentId, currency])
+  @@map("withdraw_rules")
+}
+
+model AgentFeeRule {
+  id                     String   @id @default(cuid())
+  agentId                String   @map("agent_id")
+  minMerchantFeeRate     Decimal  @default(0.1) @map("min_merchant_fee_rate") @db.Decimal(8, 4)
+  minWithdrawFeeRate     Decimal  @default(0.01) @map("min_withdraw_fee_rate") @db.Decimal(8, 4)
+  allowedPaymentMethods  Json     @default("[]") @map("allowed_payment_methods")
+  allowedSupplierIds     Json     @default("[]") @map("allowed_supplier_ids")
+  allowedChannelIds      Json     @default("[]") @map("allowed_channel_ids")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  agent Agent @relation(fields: [agentId], references: [id])
+
+  @@unique([agentId])
+  @@map("agent_fee_rules")
 }
 
 model ApiKey {

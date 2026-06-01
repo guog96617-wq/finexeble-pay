@@ -183,6 +183,116 @@ async function main() {
     });
   }
 
+  let sandboxChannel = supplier.channels.find((channel) => channel.name === "FXpay Sandbox Pay");
+  if (!sandboxChannel) {
+    sandboxChannel = await prisma.channel.create({
+      data: {
+        supplierId: supplier.id,
+        name: "FXpay Sandbox Pay",
+        paymentMethod: "SANDBOX_PAY",
+        country: "GLOBAL",
+        currency: "USD",
+        feeRate: new Prisma.Decimal("0.015"),
+        priority: 3,
+      },
+    });
+  }
+
+  const seededChannels = await prisma.channel.findMany({ where: { supplierId: supplier.id, currency: "USD" }, orderBy: [{ isPrimary: "desc" }, { priority: "asc" }] });
+  const primaryForMerchant = seededChannels.find((channel) => channel.name === "MockPay Primary Card") ?? seededChannels[0];
+  const backupForMerchant = seededChannels.find((channel) => channel.name === "MockPay Backup Card") ?? sandboxChannel;
+
+  await prisma.agentFeeRule.upsert({
+    where: { agentId: agent.id },
+    update: {
+      minMerchantFeeRate: new Prisma.Decimal("0.1000"),
+      minWithdrawFeeRate: new Prisma.Decimal("0.0100"),
+      allowedPaymentMethods: ["CARD", "LOCAL_PAYMENT", "BANK_TRANSFER", "SANDBOX_PAY"],
+      allowedSupplierIds: [supplier.id],
+      allowedChannelIds: seededChannels.map((channel) => channel.id),
+    },
+    create: {
+      agentId: agent.id,
+      minMerchantFeeRate: new Prisma.Decimal("0.1000"),
+      minWithdrawFeeRate: new Prisma.Decimal("0.0100"),
+      allowedPaymentMethods: ["CARD", "LOCAL_PAYMENT", "BANK_TRANSFER", "SANDBOX_PAY"],
+      allowedSupplierIds: [supplier.id],
+      allowedChannelIds: seededChannels.map((channel) => channel.id),
+    },
+  });
+
+  await prisma.merchantChannel.upsert({
+    where: { merchantId_channelId: { merchantId: merchant.id, channelId: primaryForMerchant.id } },
+    update: {
+      isEnabled: true,
+      isPrimary: true,
+      isBackup: false,
+      merchantFeeRate: new Prisma.Decimal("0.1200"),
+      merchantFixedFee: new Prisma.Decimal("0.30"),
+      pspCostRate: new Prisma.Decimal("0.0180"),
+      pspFixedFee: new Prisma.Decimal("0.10"),
+      minFee: new Prisma.Decimal("0.30"),
+    },
+    create: {
+      merchantId: merchant.id,
+      channelId: primaryForMerchant.id,
+      isEnabled: true,
+      isPrimary: true,
+      merchantFeeRate: new Prisma.Decimal("0.1200"),
+      merchantFixedFee: new Prisma.Decimal("0.30"),
+      pspCostRate: new Prisma.Decimal("0.0180"),
+      pspFixedFee: new Prisma.Decimal("0.10"),
+      minFee: new Prisma.Decimal("0.30"),
+    },
+  });
+
+  await prisma.merchantChannel.upsert({
+    where: { merchantId_channelId: { merchantId: merchant.id, channelId: backupForMerchant.id } },
+    update: {
+      isEnabled: true,
+      isPrimary: false,
+      isBackup: true,
+      merchantFeeRate: new Prisma.Decimal("0.1200"),
+      merchantFixedFee: new Prisma.Decimal("0.30"),
+      pspCostRate: new Prisma.Decimal("0.0230"),
+      pspFixedFee: new Prisma.Decimal("0.10"),
+      minFee: new Prisma.Decimal("0.30"),
+    },
+    create: {
+      merchantId: merchant.id,
+      channelId: backupForMerchant.id,
+      isEnabled: true,
+      isBackup: true,
+      merchantFeeRate: new Prisma.Decimal("0.1200"),
+      merchantFixedFee: new Prisma.Decimal("0.30"),
+      pspCostRate: new Prisma.Decimal("0.0230"),
+      pspFixedFee: new Prisma.Decimal("0.10"),
+      minFee: new Prisma.Decimal("0.30"),
+    },
+  });
+
+  await prisma.withdrawRule.upsert({
+    where: { merchantId_currency: { merchantId: merchant.id, currency: "USD" } },
+    update: {
+      minAmount: new Prisma.Decimal("1.00"),
+      maxAmount: new Prisma.Decimal("5000.00"),
+      withdrawFeeRate: new Prisma.Decimal("0.0150"),
+      withdrawFixedFee: new Prisma.Decimal("1.00"),
+      settlementDays: 1,
+      requireManualReview: true,
+    },
+    create: {
+      merchantId: merchant.id,
+      currency: "USD",
+      minAmount: new Prisma.Decimal("1.00"),
+      maxAmount: new Prisma.Decimal("5000.00"),
+      withdrawFeeRate: new Prisma.Decimal("0.0150"),
+      withdrawFixedFee: new Prisma.Decimal("1.00"),
+      settlementDays: 1,
+      requireManualReview: true,
+    },
+  });
+
   const apiKey = await prisma.apiKey.upsert({
     where: { apiKey: "pk_demo_global_shop" },
     update: {},

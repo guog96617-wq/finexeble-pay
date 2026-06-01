@@ -13,6 +13,7 @@ export function MerchantForms() {
   const [loading, setLoading] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState("");
 
   async function submit(path: string, body: unknown, key: string, success: string) {
     setLoading(key);
@@ -28,6 +29,10 @@ export function MerchantForms() {
       if (!response.ok) {
         setError(payload?.error?.message ?? "Request failed.");
         return;
+      }
+      const data = payload?.data ?? payload;
+      if (key === "order" && data?.paymentUrl) {
+        setPaymentUrl(data.paymentUrl);
       }
       setMessage(success);
       router.refresh();
@@ -78,6 +83,11 @@ export function MerchantForms() {
 
       <Toast message={message} type="success" />
       <Toast message={error} type="error" />
+      {paymentUrl ? (
+        <a className="button secondary justify-center" href={paymentUrl} target="_blank" rel="noreferrer">
+          Open Checkout
+        </a>
+      ) : null}
     </div>
   );
 }

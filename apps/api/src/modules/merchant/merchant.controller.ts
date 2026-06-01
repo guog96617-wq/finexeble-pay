@@ -37,6 +37,16 @@ export class MerchantController {
     return this.merchant.transactions();
   }
 
+  @Get("payment-methods")
+  paymentMethods() {
+    return this.merchant.paymentMethods();
+  }
+
+  @Get("withdraw-rules")
+  withdrawRules() {
+    return this.merchant.withdrawRules();
+  }
+
   @Post("withdraws")
   createWithdraw(@Body() body: Record<string, unknown>) {
     return this.merchant.createWithdraw(body);
