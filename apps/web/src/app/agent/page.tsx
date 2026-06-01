@@ -53,7 +53,7 @@ export default async function AgentPage() {
   ]);
 
   return (
-    <DashboardShell requiredRole="AGENT_ADMIN" title="Agent Center" role="Agent Admin" nav={[["Dashboard", "#dashboard"], ["My Merchants", "#merchants"], ["Order Stats", "#orders"], ["Commission", "#commissions"], ["Account", "#account"]]}>
+    <DashboardShell requiredRole="AGENT_ADMIN" title="Agent Center" role="Agent Admin">
       <section className="grid-fit">
         {agentStats.map((stat) => (
           <MetricCard key={stat.label} {...stat} />

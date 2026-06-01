@@ -83,7 +83,7 @@ export default async function MerchantPage() {
   const withdrawRows = withdraws.map((withdraw) => [withdraw.withdrawNo, <StatusBadge key={`${withdraw.withdrawNo}-status`} status={withdraw.status} />, money(withdraw.amount, withdraw.currency)]);
 
   return (
-    <DashboardShell requiredRole="MERCHANT_ADMIN" title="Merchant Center" role="Merchant Admin" nav={[["Dashboard", "#dashboard"], ["Orders", "#orders"], ["Finance", "#wallet"], ["Developer", "#api"], ["SDK", "#sdk"], ["Plugins", "#plugins"], ["Account", "#account"]]}>
+    <DashboardShell requiredRole="MERCHANT_ADMIN" title="Merchant Center" role="Merchant Admin">
       <section className="grid-fit">
         {merchantStats.map((stat) => (
           <MetricCard key={stat.label} {...stat} />
@@ -98,7 +98,9 @@ export default async function MerchantPage() {
           <DataTable columns={["Order", "Merchant Order", "Status", "Amount", "Checkout", "Payment Attempts"]} rows={orderRows} />
         </div>
         <div className="grid gap-4">
-          <MerchantForms />
+          <div id="order-form">
+            <MerchantForms />
+          </div>
           <div id="wallet" className="surface p-5">
             <h2 className="text-lg font-black text-slate-950">Wallet</h2>
             <div className="mt-4 grid gap-2 text-sm text-slate-600">

@@ -3,25 +3,46 @@ import { LayoutDashboard, RefreshCw, Search } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { LogoutButton } from "./LogoutButton";
 
-export type NavItem = [string, string];
+export type NavLink = [string, string, string?];
+export type NavItem = NavLink | { section: string; items: NavLink[] };
+
+function isSection(item: NavItem): item is { section: string; items: NavLink[] } {
+  return !Array.isArray(item);
+}
+
+function NavAnchor({ item }: { item: NavLink }) {
+  const [label, href, description] = item;
+  return (
+    <a title={description} href={href} className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-brand" />
+      <span className="truncate">{label}</span>
+    </a>
+  );
+}
 
 export function Sidebar({ nav }: { nav: NavItem[] }) {
   return (
-    <aside className="fixed hidden h-screen w-64 border-r border-line bg-white/92 p-5 shadow-[12px_0_40px_rgba(15,23,42,.04)] backdrop-blur-xl lg:block">
+    <aside className="fixed hidden h-screen w-72 overflow-y-auto border-r border-line bg-white/92 p-5 shadow-[12px_0_40px_rgba(15,23,42,.04)] backdrop-blur-xl lg:block">
       <BrandLogo variant="sidebar" priority />
       <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50/70 p-3">
         <p className="text-xs font-bold uppercase tracking-[.16em] text-brand">Workspace</p>
         <p className="mt-1 text-sm font-black text-slate-900">Finexeble Demo</p>
       </div>
       <nav className="mt-6 grid gap-1">
-        {nav.map(([label, href]) => (
-          <a key={label} href={href} className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-brand" />
-            {label}
-          </a>
-        ))}
+        {nav.map((item, index) =>
+          isSection(item) ? (
+            <div key={item.section} className={index === 0 ? "" : "mt-4"}>
+              <p className="mb-1 px-3 text-xs font-black uppercase tracking-[.16em] text-slate-400">{item.section}</p>
+              <div className="grid gap-1">
+                {item.items.map((link) => <NavAnchor key={`${item.section}-${link[0]}`} item={link} />)}
+              </div>
+            </div>
+          ) : (
+            <NavAnchor key={item[0]} item={item} />
+          ),
+        )}
       </nav>
-      <div className="absolute bottom-5 left-5 right-5">
+      <div className="sticky bottom-0 mt-6 bg-white/92 pt-4">
         <LogoutButton />
       </div>
     </aside>
@@ -86,11 +107,16 @@ export function PageContainer({ children }: { children: ReactNode }) {
   return <div className="mx-auto max-w-7xl p-5">{children}</div>;
 }
 
+function flattenNav(nav: NavItem[]): NavLink[] {
+  return nav.flatMap((item) => (isSection(item) ? item.items : [item]));
+}
+
 export function MobileNav({ nav }: { nav: NavItem[] }) {
+  const links = flattenNav(nav);
   return (
     <div className="sticky top-[89px] z-10 border-b border-line bg-white/90 px-4 py-3 backdrop-blur-xl lg:hidden">
       <div className="flex gap-2 overflow-x-auto">
-        {nav.map(([label, href]) => (
+        {links.map(([label, href]) => (
           <a key={label} href={href} className="shrink-0 rounded-full border border-line bg-white px-3 py-2 text-xs font-bold text-slate-600">
             {label}
           </a>
