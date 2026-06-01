@@ -172,6 +172,16 @@ export class CoreController {
     return this.core.listPlugins();
   }
 
+  @Get("users")
+  users() {
+    return this.core.listUsers();
+  }
+
+  @Get("system-configs")
+  systemConfigs() {
+    return this.core.listSystemConfigs();
+  }
+
   @Get("webhook-logs")
   webhookLogs() {
     return this.core.listWebhookLogs();

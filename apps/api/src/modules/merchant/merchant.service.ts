@@ -161,6 +161,16 @@ export class MerchantService {
     return this.prisma.webhook.findMany({ where: { merchantId: merchant.id } });
   }
 
+  async webhookLogs() {
+    const merchant = await this.demoMerchant();
+    return this.prisma.webhookLog.findMany({
+      where: { merchantId: merchant.id },
+      include: { order: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+  }
+
   async createWebhook(body: { url: string; secret?: string }) {
     const merchant = await this.demoMerchant();
     return this.prisma.webhook.create({

@@ -342,6 +342,17 @@ export class CoreService {
     return this.prisma.plugin.findMany({ include: { versions: true }, orderBy: { createdAt: "desc" } });
   }
 
+  listUsers() {
+    return this.prisma.user.findMany({
+      include: { merchant: true, agent: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  listSystemConfigs() {
+    return this.prisma.systemConfig.findMany({ orderBy: { configKey: "asc" } });
+  }
+
   listWebhookLogs() {
     return this.prisma.webhookLog.findMany({ include: { merchant: true, order: true }, orderBy: { createdAt: "desc" }, take: 100 });
   }

@@ -72,6 +72,11 @@ export class MerchantController {
     return this.merchant.webhooks();
   }
 
+  @Get("webhook-logs")
+  webhookLogs() {
+    return this.merchant.webhookLogs();
+  }
+
   @Post("webhooks")
   createWebhook(@Body() body: { url: string; secret?: string }) {
     return this.merchant.createWebhook(body);

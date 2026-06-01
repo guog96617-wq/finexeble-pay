@@ -1,5 +1,6 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
 import { apiGet, money } from "@/lib/api";
@@ -22,11 +23,8 @@ export default async function MerchantCheckoutOrdersPage() {
     order.orderNo,
     <StatusBadge key={`${order.orderNo}-status`} status={order.status} />,
     money(order.amount, order.currency),
-    order.paymentUrl ? (
-      <a key={`${order.orderNo}-checkout`} href={order.paymentUrl} className="font-bold text-brand">
-        打开 Checkout
-      </a>
-    ) : "-",
+    order.paymentUrl ? <CopyLinkButton key={`${order.orderNo}-copy`} value={order.paymentUrl} label="复制支付链接" /> : "-",
+    order.paymentUrl ? <a key={`${order.orderNo}-checkout`} href={order.paymentUrl} className="font-bold text-brand">打开 Checkout</a> : "-",
     order.createdAt ? new Date(order.createdAt).toLocaleString() : "-",
   ]);
 
@@ -39,7 +37,7 @@ export default async function MerchantCheckoutOrdersPage() {
         status="ACTIVE"
       />
       <DataTable
-        columns={["订单号", "状态", "金额", "Checkout 链接", "创建时间"]}
+        columns={["订单号", "状态", "金额", "Copy Payment Link", "打开 Checkout", "创建时间"]}
         rows={rows}
         empty="暂无 Checkout 订单。"
       />
