@@ -5,8 +5,9 @@ const links = [
   ["Product", "/product"],
   ["Developers", "/docs/api"],
   ["Plugins", "/plugins"],
-  ["Pricing", "/payments"],
-  ["Contact", "/contact"],
+  ["Pricing", "/pricing"],
+  ["Status", "/status"],
+  ["Contact", "/contact-sales"],
 ];
 
 export function Nav() {

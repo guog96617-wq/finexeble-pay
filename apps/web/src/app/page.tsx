@@ -164,9 +164,9 @@ X-SIGNATURE: hmac_sha256(...)
             <BrandLogo />
             <p className="mt-4 max-w-sm leading-6">{brand.description}</p>
           </div>
-          <FooterGroup title="Product" items={["Payments", "Routing", "Wallets", "Withdrawals"]} />
+          <FooterGroup title="Product" items={["Pricing", "Status", "Changelog", "Trust"]} />
           <FooterGroup title="Developers" items={["API Docs", "HMAC Signature", "Webhooks", "Plugins"]} />
-          <FooterGroup title="Company" items={["Contact", "Merchant Apply", "Agent Program", "Copyright 2026"]} />
+          <FooterGroup title="Company" items={["Contact Sales", "FAQ", "Compliance", "Copyright 2026"]} />
         </div>
       </footer>
     </main>

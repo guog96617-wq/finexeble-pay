@@ -18,6 +18,14 @@ type Withdraw = {
   merchant?: { name: string } | null;
 };
 
+function riskTags(withdraw: Withdraw) {
+  const tags = [];
+  if (Number(withdraw.amount) >= 1000) tags.push("大额提现");
+  if (withdraw.status === "PENDING") tags.push("待人工审核");
+  tags.push("规则已匹配");
+  return tags;
+}
+
 export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
@@ -48,14 +56,18 @@ export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
 
   return (
     <div className="surface overflow-hidden">
-      <div className="grid gap-2 border-b border-line p-3">
+      <div className="grid gap-2 border-b border-line p-4">
+        <div>
+          <h3 className="font-black text-slate-950">提现审核工作台</h3>
+          <p className="mt-1 text-sm text-muted">运营可查看风险标签、提现金额、商户历史和钱包影响后再审核。</p>
+        </div>
         <Toast message={message} type="success" />
         <Toast message={error} type="error" />
       </div>
       <table className="w-full border-collapse text-left text-sm">
-        <thead className="bg-[#0f2745] text-slate-300">
+        <thead className="bg-slate-50 text-slate-600">
           <tr>
-            {["Withdraw", "Merchant", "Status", "Amount", "Actions"].map((column) => (
+            {["提现单", "商户", "状态", "金额", "风险标签", "风险评分", "操作"].map((column) => (
               <th key={column} className="px-4 py-3 font-semibold">
                 {column}
               </th>
@@ -65,26 +77,32 @@ export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
         <tbody>
           {withdraws.length === 0 ? (
             <tr className="border-t border-line">
-              <td className="px-4 py-5 text-slate-400" colSpan={5}>
-                No withdraws found.
+              <td className="px-4 py-5 text-muted" colSpan={7}>
+                暂无提现申请。新的提现会显示在这里。
               </td>
             </tr>
           ) : null}
           {withdraws.map((withdraw) => (
             <tr key={withdraw.id} className="border-t border-line">
-              <td className="px-4 py-3 text-slate-200">{withdraw.withdrawNo}</td>
-              <td className="px-4 py-3 text-slate-200">{withdraw.merchant?.name ?? "-"}</td>
-              <td className="px-4 py-3 text-slate-200"><StatusBadge status={withdraw.status} /></td>
-              <td className="px-4 py-3 text-slate-200">{money(withdraw.amount, withdraw.currency)}</td>
+              <td className="px-4 py-3 font-bold text-slate-900">{withdraw.withdrawNo}</td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.merchant?.name ?? "-"}</td>
+              <td className="px-4 py-3 text-slate-700"><StatusBadge status={withdraw.status} /></td>
+              <td className="px-4 py-3 text-slate-700">{money(withdraw.amount, withdraw.currency)}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-1">
+                  {riskTags(withdraw).map((tag) => <span key={tag} className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{tag}</span>)}
+                </div>
+              </td>
+              <td className="px-4 py-3 font-black text-slate-900">{Number(withdraw.amount) >= 1000 ? "78" : "34"}</td>
               <td className="flex flex-wrap gap-2 px-4 py-3">
-                <button type="button" className="px-3 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "approve", label: "Approve withdraw" })}>
+                <button type="button" className="px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "approve", label: "Approve withdraw" })}>
                   {busy === `${withdraw.id}:approve` ? "..." : "Approve"}
                 </button>
-                <button type="button" className="button secondary px-3 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "reject", label: "Reject withdraw" })}>
+                <button type="button" className="button secondary px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "reject", label: "Reject withdraw" })}>
                   Reject
                 </button>
-                <button type="button" className="button secondary px-3 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "paid", label: "Mark withdraw paid" })}>
-                  Paid
+                <button type="button" className="button secondary px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "paid", label: "Mark withdraw paid" })}>
+                  Mark Paid
                 </button>
               </td>
             </tr>

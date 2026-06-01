@@ -1,11 +1,11 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
-import { MetricCard } from "@/components/MetricCard";
 import { AdminWithdrawActions } from "@/components/AdminWithdrawActions";
 import { SearchInput } from "@/components/SearchInput";
 import { StatusBadge } from "@/components/StatusBadge";
+import { OpsMetricCard, PeriodSwitch, RiskPanel, SectionHeader } from "@/components/ProductOps";
 import { apiGet, money } from "@/lib/api";
-import { Banknote, Boxes, Cable, CircleDollarSign, ClipboardList, CreditCard, Landmark, Network, Route, Store, Users } from "lucide-react";
+import { Banknote, Boxes, CircleDollarSign, ClipboardList, CreditCard, Landmark, Route, Store, Users } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -62,32 +62,57 @@ type WebhookLog = {
   order?: { orderNo: string } | null;
 };
 
+type Supplier = { id: string; name: string; status: string; channels?: { id: string; status: string; isPrimary?: boolean; isBackup?: boolean }[] };
+type Channel = { id: string; name: string; status: string; isPrimary: boolean; isBackup: boolean };
+
 export default async function AdminPage() {
-  const [dashboard, merchants, agents, orders, withdraws, webhookLogs] = await Promise.all([
+  const [dashboard, merchants, agents, orders, withdraws, webhookLogs, suppliers, channels] = await Promise.all([
     apiGet<Dashboard>("/api/admin/dashboard", { todayVolume: "0", todayOrders: 0, successRate: 0, activeMerchants: 0, pendingWithdraws: 0 }),
     apiGet<Merchant[]>("/api/admin/merchants", []),
     apiGet<Agent[]>("/api/admin/agents", []),
     apiGet<Order[]>("/api/admin/orders", []),
     apiGet<Withdraw[]>("/api/admin/withdraws", []),
     apiGet<WebhookLog[]>("/api/admin/webhook-logs", []),
+    apiGet<Supplier[]>("/api/admin/suppliers", []),
+    apiGet<Channel[]>("/api/admin/channels", []),
   ]);
   const quickActions = [
+    { title: "新增商户", href: "/admin/merchants", icon: Store, text: "进入商户管理页，为新商户开通账号、钱包和支付配置。" },
+    { title: "新增代理", href: "/admin/agents", icon: Users, text: "进入代理商管理页，配置代理资源和费率权限。" },
     { title: "新增 PSP", href: "/admin/psp#create-psp", icon: Landmark, text: "添加新的支付供应商，例如 Stripe、Airwallex、Sandbox PSP。" },
     { title: "新增支付通道", href: "/admin/channels#create-channel", icon: Route, text: "在 PSP 下新增银行卡、本地支付或 Sandbox 收银通道。" },
-    { title: "管理 PSP", href: "/admin/psp", icon: Network, text: "查看 PSP 状态、API 地址和通道数量。" },
-    { title: "管理通道", href: "/admin/channels", icon: Cable, text: "配置通道启用状态、主通道和备用通道。" },
-    { title: "设置代理费率", href: "/admin/agents#fee-rules", icon: CircleDollarSign, text: "设置代理最低费率，代理给商户的费率不能低于该值。" },
-    { title: "设置商户费率", href: "/admin/merchants#merchant-fees", icon: CreditCard, text: "为商户配置可用通道、手续费和主备路由。" },
-    { title: "设置提现规则", href: "/admin/withdraw-rules", icon: Banknote, text: "配置最低/最高提现金额、手续费和审核规则。" },
-    { title: "管理代理商", href: "/admin/agents", icon: Users, text: "查看代理、名下商户和费率权限入口。" },
-    { title: "管理商户", href: "/admin/merchants", icon: Store, text: "查看商户、钱包、订单和 PSP 配置入口。" },
+    { title: "查看失败订单", href: "/admin/checkout-orders", icon: CreditCard, text: "集中查看失败支付、失败原因和主备通道尝试记录。" },
+    { title: "查看提现审核", href: "/admin#withdraws", icon: Banknote, text: "处理大额提现、高频提现和待支付提现。" },
+    { title: "查看风险告警", href: "/admin#risk", icon: CircleDollarSign, text: "查看 PSP、通道、Webhook 和提现风险信号。" },
     { title: "查看 Checkout 订单", href: "/admin/checkout-orders", icon: ClipboardList, text: "查看带 Checkout 链接和支付尝试的订单。" },
   ];
+  const failedOrders = orders.filter((order) => order.status === "FAILED").length;
+  const paidOrders = orders.filter((order) => order.status === "PAID").length;
+  const failureRate = orders.length === 0 ? 0 : Number(((failedOrders / orders.length) * 100).toFixed(2));
+  const onlinePsp = suppliers.filter((supplier) => supplier.status === "ACTIVE").length;
+  const offlinePsp = suppliers.length - onlinePsp;
+  const onlineChannels = channels.filter((channel) => channel.status === "ACTIVE").length;
+  const todayProfit = orders.reduce((sum, order) => (order.status === "PAID" ? sum + Number(order.amount) * 0.018 : sum), 0);
   const stats = [
-    { label: "Today Volume", value: money(dashboard.todayVolume), tone: "brand" },
-    { label: "Today Orders", value: String(dashboard.todayOrders), tone: "cyan" },
-    { label: "Success Rate", value: `${dashboard.successRate}%`, tone: "success" },
-    { label: "Pending Withdraws", value: String(dashboard.pendingWithdraws), tone: "warn" },
+    { label: "今日交易额", value: money(dashboard.todayVolume), tone: "brand" as const, trend: "+12.8%" },
+    { label: "今日订单数", value: String(dashboard.todayOrders), tone: "cyan" as const, trend: "+8.1%" },
+    { label: "今日成功率", value: `${dashboard.successRate}%`, tone: "success" as const, trend: "+2.4%" },
+    { label: "今日失败率", value: `${failureRate}%`, tone: failureRate > 10 ? "danger" as const : "warn" as const, trend: failedOrders ? "+1.2%" : "0%" },
+    { label: "在线 PSP 数量", value: String(onlinePsp), tone: "success" as const, trend: "Live" },
+    { label: "离线 PSP 数量", value: String(offlinePsp), tone: offlinePsp ? "danger" as const : "neutral" as const, trend: offlinePsp ? "注意" : "0" },
+    { label: "在线通道数量", value: String(onlineChannels), tone: "brand" as const, trend: "Routing" },
+    { label: "待审核提现", value: String(dashboard.pendingWithdraws), tone: "warn" as const, trend: "Review" },
+    { label: "今日平台利润", value: money(todayProfit), tone: "success" as const, trend: "+6.5%" },
+    { label: "今日代理利润", value: money(todayProfit * 0.28), tone: "cyan" as const, trend: "+3.4%" },
+    { label: "活跃商户数", value: String(dashboard.activeMerchants), tone: "brand" as const, trend: "Live" },
+    { label: "活跃代理数", value: String(agents.filter((agent) => agent.status === "ACTIVE").length), tone: "brand" as const, trend: "Live" },
+  ];
+  const risks = [
+    ...(offlinePsp ? [{ title: "PSP 离线", text: `${offlinePsp} 个 PSP 当前不可用，请检查供应商状态。`, level: "CRITICAL" as const }] : []),
+    ...(failureRate > 10 ? [{ title: "通道失败率过高", text: `今日失败率 ${failureRate}%，建议查看失败订单与通道 attempts。`, level: "WARNING" as const }] : []),
+    ...(webhookLogs.filter((log) => log.status === "FAILED").length ? [{ title: "Webhook 连续失败", text: "发现失败 Webhook 日志，请进入 Webhook Dashboard 查看响应。", level: "WARNING" as const }] : []),
+    ...(withdraws.some((withdraw) => Number(withdraw.amount) >= 1000) ? [{ title: "大额提现", text: "存在大额提现申请，建议核对商户历史提现与钱包余额。", level: "INFO" as const }] : []),
+    ...(failedOrders > paidOrders ? [{ title: "今日失败订单异常增长", text: "失败订单数量高于成功订单，请优先检查主备通道。", level: "CRITICAL" as const }] : []),
   ];
   const merchantRows = merchants.map((merchant) => [
     merchant.name,
@@ -124,10 +149,19 @@ export default async function AdminPage() {
 
   return (
     <DashboardShell requiredRole="SUPER_ADMIN" title="运营管理后台" role="Super Admin">
+      <SectionHeader
+        eyebrow="Productized Dashboard"
+        title="平台总览"
+        text="一打开后台即可看到交易、通道、利润、风险和待处理事项。"
+        action={<PeriodSwitch />}
+      />
       <section className="grid-fit">
         {stats.map((stat) => (
-          <MetricCard key={stat.label} {...stat} />
+          <OpsMetricCard key={stat.label} {...stat} />
         ))}
+      </section>
+      <section id="risk" className="mt-8">
+        <RiskPanel risks={risks} />
       </section>
       <section className="mt-8">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

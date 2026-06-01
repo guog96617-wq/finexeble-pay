@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Toast } from "./Toast";
@@ -312,23 +312,47 @@ export function WithdrawRuleForm({ merchantId, agentId, agent = false }: { merch
 
 export function CheckoutPayBox({ orderNo }: { orderNo: string }) {
   const [result, setResult] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [seconds, setSeconds] = useState(15 * 60);
   const { message, error, run } = useAction();
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   async function pay(sandboxResult: "success" | "failed" | "timeout") {
+    setProcessing(true);
     await run(async () => {
       const payload = await post(`/api/checkout/${orderNo}/pay`, { paymentMethod: "SANDBOX_PAY", sandboxResult });
       setResult(payload?.order?.status ?? "PROCESSING");
     }, `Sandbox ${sandboxResult}`);
+    setProcessing(false);
   }
   return (
     <div className="grid gap-3">
+      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-blue-900">安全支付处理中</p>
+            <p className="mt-1 text-xs text-blue-700">订单将在 {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} 后过期。</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {[0, 1, 2].map((item) => <span key={item} className="h-2 w-2 animate-pulse rounded-full bg-brand" style={{ animationDelay: `${item * 120}ms` }} />)}
+          </div>
+        </div>
+      </div>
       <div className="grid gap-2 sm:grid-cols-3">
-        <button type="button" onClick={() => void pay("success")}>Pay Success</button>
-        <button type="button" className="button secondary" onClick={() => void pay("failed")}>Pay Failed</button>
-        <button type="button" className="button secondary" onClick={() => void pay("timeout")}>Pay Timeout</button>
+        <button type="button" disabled={processing} onClick={() => void pay("success")}>{processing ? "Processing..." : "Pay Success"}</button>
+        <button type="button" disabled={processing} className="button secondary" onClick={() => void pay("failed")}>Pay Failed</button>
+        <button type="button" disabled={processing} className="button secondary" onClick={() => void pay("timeout")}>Pay Timeout</button>
       </div>
       <Toast message={message} type="success" />
       <Toast message={error} type="error" />
-      {result ? <p className="text-sm font-bold text-slate-700">Current status: {result}</p> : null}
+      {result ? (
+        <div className="rounded-xl border border-line bg-white p-4">
+          <p className="text-sm font-bold text-slate-700">Current status: {result}</p>
+          <p className="mt-1 text-xs text-muted">{result === "PAID" ? "支付成功，商户钱包会自动入账。" : result === "FAILED" ? "支付失败，可重新选择方式重试。" : "支付仍在处理中，系统会继续轮询订单状态。"}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

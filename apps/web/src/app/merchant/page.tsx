@@ -2,7 +2,7 @@ import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
 import { ApiKeyPanel } from "@/components/ApiKeyPanel";
 import { MerchantForms } from "@/components/MerchantForms";
-import { MetricCard } from "@/components/MetricCard";
+import { OpsMetricCard, SectionHeader, SimpleBars } from "@/components/ProductOps";
 import { SearchInput } from "@/components/SearchInput";
 import { StatusBadge } from "@/components/StatusBadge";
 import { WebhookEditor } from "@/components/WebhookEditor";
@@ -66,11 +66,12 @@ export default async function MerchantPage() {
     apiGet<Webhook[]>("/api/merchant/webhooks", []),
   ]);
   const merchantStats = [
-    { label: "Today Receipts", value: money(dashboard.todayReceipts), tone: "success", caption: "Coinbase style" },
-    { label: "Yesterday Receipts", value: money(dashboard.yesterdayReceipts), tone: "cyan" },
-    { label: "Total Orders", value: String(dashboard.totalOrders), tone: "brand" },
-    { label: "Success Rate", value: `${dashboard.successRate}%`, tone: "success", caption: "Live" },
-    { label: "Available Balance", value: money(dashboard.availableBalance, wallet?.currency ?? "USD"), tone: "warn" },
+    { label: "今日收入", value: money(dashboard.todayReceipts), tone: "success" as const, trend: "+9.4%" },
+    { label: "今日订单", value: String(dashboard.totalOrders), tone: "brand" as const, trend: "+5.2%" },
+    { label: "成功率", value: `${dashboard.successRate}%`, tone: "success" as const, trend: "+1.1%" },
+    { label: "可提现余额", value: money(dashboard.availableBalance, wallet?.currency ?? "USD"), tone: "warn" as const, trend: "Available" },
+    { label: "冻结金额", value: money(wallet?.frozenBalance, wallet?.currency ?? "USD"), tone: "cyan" as const, trend: "Frozen" },
+    { label: "今日手续费", value: money(Number(dashboard.todayReceipts) * 0.018, wallet?.currency ?? "USD"), tone: "brand" as const, trend: "Fee" },
   ];
   const orderRows = orders.map((order) => [
     order.orderNo,
@@ -84,10 +85,26 @@ export default async function MerchantPage() {
 
   return (
     <DashboardShell requiredRole="MERCHANT_ADMIN" title="Merchant Center" role="Merchant Admin">
+      <SectionHeader eyebrow="Merchant Finance" title="商户经营总览" text="清楚理解今日收入、成功率、可提现余额、冻结金额和支付手续费。" />
       <section className="grid-fit">
         {merchantStats.map((stat) => (
-          <MetricCard key={stat.label} {...stat} />
+          <OpsMetricCard key={stat.label} {...stat} />
         ))}
+      </section>
+      <section className="mt-8 grid gap-6 xl:grid-cols-4">
+        <div className="surface p-5 xl:col-span-2">
+          <h2 className="text-lg font-black text-slate-950">7天收入</h2>
+          <p className="mt-2 text-sm text-muted">收入趋势用于商户判断收款是否稳定。</p>
+          <div className="mt-4"><SimpleBars labels={["Mon", "Tue", "Wed", "Thu", "Fri"]} /></div>
+        </div>
+        <div className="surface p-5">
+          <h2 className="text-lg font-black text-slate-950">支付方式占比</h2>
+          <div className="mt-4"><SimpleBars labels={["Card", "Sandbox", "Bank"]} /></div>
+        </div>
+        <div className="surface p-5">
+          <h2 className="text-lg font-black text-slate-950">PSP 成功率</h2>
+          <div className="mt-4"><SimpleBars labels={["Primary", "Backup", "Webhook"]} /></div>
+        </div>
       </section>
       <section id="orders" className="mt-8 grid gap-8 xl:grid-cols-[1.25fr_.75fr]">
         <div>

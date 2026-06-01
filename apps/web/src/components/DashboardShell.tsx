@@ -15,7 +15,7 @@ const adminNav: NavItem[] = [
   { section: "运营管理", items: [["商户管理", "/admin/merchants"], ["代理商管理", "/admin/agents"], ["PSP 管理", "/admin/psp"], ["通道管理", "/admin/channels"]] },
   { section: "费率与规则", items: [["代理费率规则", "/admin/agents#fee-rules"], ["商户费率配置", "/admin/merchants#merchant-fees"], ["提现规则", "/admin/withdraw-rules"]] },
   { section: "交易与资金", items: [["订单管理", "/admin#orders"], ["Checkout 订单", "/admin/checkout-orders"], ["钱包流水", "/admin#wallet"], ["提现审核", "/admin#withdraws"]] },
-  { section: "开发者与插件", items: [["API 日志", "/admin#api-logs"], ["Webhook 日志", "/admin#webhooks"], ["插件管理", "/admin#plugins"]] },
+  { section: "开发者与插件", items: [["API 日志", "/admin#api-logs"], ["Webhook Dashboard", "/admin/webhooks"], ["插件管理", "/admin#plugins"]] },
   { section: "系统与安全", items: [["用户管理", "/admin#users"], ["审计日志", "/admin#audit"], ["系统设置", "/admin#settings"]] },
 ];
 
@@ -28,8 +28,8 @@ const agentNav: NavItem[] = [
 const merchantNav: NavItem[] = [
   ["Dashboard", "/merchant"],
   { section: "收款运营", items: [["订单管理", "/merchant#orders"], ["创建订单", "/merchant#order-form"], ["我的支付方式", "/merchant/payment-methods"], ["Checkout 链接", "/merchant/payment-methods#checkout-help"]] },
-  { section: "资金管理", items: [["钱包余额", "/merchant#wallet"], ["提现申请", "/merchant#withdraws"], ["提现规则", "/merchant/payment-methods#withdraw-rule"]] },
-  { section: "开发者", items: [["API Key", "/merchant#api"], ["Webhook 配置", "/merchant#webhook"], ["SDK 插件", "/merchant#sdk"]] },
+  { section: "资金管理", items: [["钱包余额", "/merchant/wallet"], ["提现申请", "/merchant#withdraws"], ["提现规则", "/merchant/payment-methods#withdraw-rule"]] },
+  { section: "开发者", items: [["API Key", "/merchant/developers"], ["Webhook 配置", "/merchant#webhook"], ["SDK 插件", "/merchant#sdk"]] },
 ];
 
 function navForRole(requiredRole: UserRole) {

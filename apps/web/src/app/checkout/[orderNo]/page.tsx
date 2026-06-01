@@ -32,11 +32,18 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
           <div>
             <h2 className="font-black text-slate-950">Payment methods</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-4">
-              {payload.paymentMethods.map((method) => <div key={method} className="rounded-xl border border-line bg-white p-3 text-sm font-bold text-slate-700">{method.replace("_", " ")}</div>)}
+              {payload.paymentMethods.map((method) => (
+                <div key={method} className="rounded-xl border border-line bg-white p-3 text-sm font-bold text-slate-700">
+                  <div className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-brand">FX</div>
+                  {method.replace("_", " ")}
+                </div>
+              ))}
             </div>
           </div>
           <CheckoutPayBox orderNo={order.orderNo} />
-          <p className="text-sm text-muted">Secure sandbox checkout. No real card or bank transfer is processed in this environment.</p>
+          <div className="rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-800">
+            安全支付说明：FXpay Sandbox 不会处理真实银行卡或银行转账。支付成功后会写入订单、payment attempts、钱包流水和 webhook 日志。
+          </div>
           <Link className="button secondary w-fit" href="/merchant">Return to merchant</Link>
         </div>
       </section>

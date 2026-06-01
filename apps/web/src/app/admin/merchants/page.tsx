@@ -27,6 +27,7 @@ export default async function AdminMerchantsPage() {
     <StatusBadge key={`${merchant.id}-status`} status={merchant.status} />,
     money(merchant.wallet?.availableBalance, merchant.wallet?.currency ?? "USD"),
     <div key={`${merchant.id}-actions`} className="flex flex-wrap gap-2">
+      <Link className="button secondary px-3 py-2 text-xs" href={`/admin/merchants/${merchant.id}`}>查看详情</Link>
       <Link className="button secondary px-3 py-2 text-xs" href={`/admin/merchants/${merchant.id}/psp`}>设置 PSP / 通道</Link>
       <Link className="button secondary px-3 py-2 text-xs" href={`/admin/merchants/${merchant.id}/psp#merchant-fees`}>设置商户费率</Link>
       <Link className="button secondary px-3 py-2 text-xs" href={`/admin/merchants/${merchant.id}/psp#withdraw-rule`}>设置提现规则</Link>
