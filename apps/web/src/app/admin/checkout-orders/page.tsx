@@ -1,6 +1,6 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
-import { SearchInput } from "@/components/SearchInput";
+import { ListToolbar, SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
 import { apiGet, money } from "@/lib/api";
 import Link from "next/link";
@@ -32,13 +32,13 @@ export default async function AdminCheckoutOrdersPage() {
 
   return (
     <DashboardShell requiredRole="SUPER_ADMIN" title="Checkout 订单" role="Super Admin">
-      <div className="mb-6">
-        <h2 className="text-2xl font-black text-slate-950">Checkout 订单</h2>
-        <p className="mt-2 text-sm text-muted">查看订单支付链接、支付状态和 payment attempts，方便运营排查支付过程。</p>
-      </div>
-      <div className="mb-4">
-        <SearchInput placeholder="搜索订单号或商户订单号" />
-      </div>
+      <SectionHeader
+        eyebrow="支付运营"
+        title="Checkout 订单"
+        text="查看订单支付链接、支付状态和 payment attempts，方便运营排查支付过程。"
+        status="ACTIVE"
+      />
+      <ListToolbar searchPlaceholder="搜索订单号或商户订单号" statusLabel="全部订单状态" />
       <DataTable columns={["订单号", "商户", "状态", "金额", "Checkout 链接", "Payment Attempts"]} rows={rows} empty="暂无 Checkout 订单。" />
     </DashboardShell>
   );

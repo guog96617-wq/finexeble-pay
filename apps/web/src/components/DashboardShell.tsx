@@ -11,11 +11,13 @@ const defaultNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
-  ["Dashboard", "/admin"],
-  { section: "运营管理", items: [["商户管理", "/admin/merchants"], ["代理商管理", "/admin/agents"], ["PSP 管理", "/admin/psp"], ["通道管理", "/admin/channels"]] },
-  { section: "费率与规则", items: [["代理费率规则", "/admin/agents#fee-rules"], ["商户费率配置", "/admin/merchants#merchant-fees"], ["提现规则", "/admin/withdraw-rules"]] },
-  { section: "交易与资金", items: [["订单管理", "/admin#orders"], ["Checkout 订单", "/admin/checkout-orders"], ["钱包流水", "/admin#wallet"], ["提现审核", "/admin#withdraws"]] },
-  { section: "开发者与插件", items: [["API 日志", "/admin#api-logs"], ["Webhook Dashboard", "/admin/webhooks"], ["插件管理", "/admin#plugins"]] },
+  { section: "仪表台", items: [["Dashboard", "/admin"]] },
+  { section: "支付运营", items: [["PSP 管理", "/admin/psp"], ["通道管理", "/admin/channels"], ["Checkout 订单", "/admin/checkout-orders"], ["Webhook", "/admin/webhooks"]] },
+  { section: "商户体系", items: [["商户管理", "/admin/merchants"], ["Merchant 360", "/admin/merchants"]] },
+  { section: "代理体系", items: [["代理管理", "/admin/agents"], ["代理费率规则", "/admin/agents"]] },
+  { section: "资金与结算", items: [["钱包流水", "/admin/wallet"], ["提现审核", "/admin/withdraws"], ["提现规则", "/admin/withdraw-rules"]] },
+  { section: "费率与利润", items: [["商户费率", "/admin/merchants"], ["PSP 成本", "/admin/channels"], ["平台利润", "/admin"]] },
+  { section: "开发者中心", items: [["API Keys", "/admin/merchants"], ["API Logs", "/admin/webhooks"], ["SDK / Docs", "/docs/api"]] },
   { section: "系统与安全", items: [["用户管理", "/admin#users"], ["审计日志", "/admin#audit"], ["系统设置", "/admin#settings"]] },
 ];
 

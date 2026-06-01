@@ -1,5 +1,6 @@
 import { DashboardShell } from "@/components/DashboardShell";
 import { DataTable } from "@/components/DataTable";
+import { ListToolbar, SectionHeader } from "@/components/ProductOps";
 import { WithdrawRuleForm } from "@/components/V15Forms";
 import { apiGet, money } from "@/lib/api";
 
@@ -18,10 +19,13 @@ export default async function AdminWithdrawRulesPage() {
   ]);
   return (
     <DashboardShell requiredRole="SUPER_ADMIN" title="提现规则" role="Super Admin">
-      <div className="mb-6">
-        <h2 className="text-2xl font-black text-slate-950">提现规则</h2>
-        <p className="mt-2 text-sm text-muted">配置平台、代理或商户的提现金额范围、手续费和审核规则。</p>
-      </div>
+      <SectionHeader
+        eyebrow="资金与结算"
+        title="提现规则"
+        text="配置平台、代理或商户的提现金额范围、手续费和审核规则。"
+        status="ACTIVE"
+      />
+      <ListToolbar searchPlaceholder="搜索商户、代理或币种" statusLabel="全部规则状态" />
       <section className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]">
         <WithdrawRuleForm />
         <div>

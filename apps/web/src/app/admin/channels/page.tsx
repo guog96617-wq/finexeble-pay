@@ -1,9 +1,9 @@
 import { DashboardShell } from "@/components/DashboardShell";
 import { DataTable } from "@/components/DataTable";
-import { OpsMetricCard, SectionHeader } from "@/components/ProductOps";
+import { ListToolbar, OpsMetricCard, SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ChannelRoleButtons, CreateChannelForm } from "@/components/V15Forms";
-import { apiGet, money } from "@/lib/api";
+import { apiGet } from "@/lib/api";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,6 @@ export default async function AdminChannelsPage() {
   const orders = await apiGet<Order[]>("/api/admin/orders", []);
   const paid = orders.filter((order) => order.status === "PAID").length;
   const successRate = orders.length === 0 ? 0 : Number(((paid / orders.length) * 100).toFixed(2));
-  const totalAmount = orders.reduce((sum, order) => sum + Number(order.amount), 0);
   const rows = channels.map((channel) => [
     channel.name,
     channel.supplier?.name ?? "-",
@@ -29,11 +28,6 @@ export default async function AdminChannelsPage() {
     channel.currency,
     `${Number(channel.feeRate ?? 0) * 100}%`,
     `${successRate}%`,
-    channel.isBackup ? "1.4%" : "0.8%",
-    channel.isPrimary ? "386ms" : "512ms",
-    String(Math.max(1, Math.round(orders.length / Math.max(1, channels.length)))),
-    money(totalAmount / Math.max(1, channels.length)),
-    money((totalAmount * Number(channel.feeRate ?? 0.018)) / Math.max(1, channels.length)),
     <StatusBadge key={`${channel.id}-status`} status={channel.status} />,
     channel.isPrimary ? "是" : "-",
     channel.isBackup ? "是" : "-",
@@ -51,14 +45,13 @@ export default async function AdminChannelsPage() {
         <OpsMetricCard label="在线通道" value={String(channels.filter((channel) => channel.status === "ACTIVE").length)} tone="success" trend="ONLINE" />
         <OpsMetricCard label="主通道数量" value={String(channels.filter((channel) => channel.isPrimary).length)} tone="brand" trend="Primary" />
         <OpsMetricCard label="备用通道数量" value={String(channels.filter((channel) => channel.isBackup).length)} tone="cyan" trend="Backup" />
-        <OpsMetricCard label="今日订单量" value={String(orders.length)} tone="brand" trend="+7.4%" />
-        <OpsMetricCard label="今日金额" value={money(totalAmount)} tone="success" trend="+5.1%" />
         <OpsMetricCard label="平均成功率" value={`${successRate}%`} tone="success" trend="+2.0%" />
       </section>
+      <ListToolbar searchPlaceholder="搜索通道、PSP 或支付方式" statusLabel="全部通道状态" />
       <section className="grid gap-6 xl:grid-cols-[.78fr_1.22fr]">
         <CreateChannelForm suppliers={suppliers} />
         <div>
-          <DataTable columns={["通道名称", "所属 PSP", "支付方式", "国家/地区", "币种", "成本费率", "成功率", "超时率", "平均响应", "今日订单", "今日金额", "今日利润", "状态", "主通道", "备用通道", "操作"]} rows={rows} empty="还没有支付通道，请先点击新增通道。" />
+          <DataTable columns={["通道名称", "所属 PSP", "支付方式", "国家/地区", "币种", "成本费率", "成功率", "状态", "主通道", "备用通道", "操作"]} rows={rows} empty="还没有支付通道，请先点击新增通道。" />
         </div>
       </section>
     </DashboardShell>

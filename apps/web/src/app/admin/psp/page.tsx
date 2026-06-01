@@ -1,6 +1,6 @@
 import { DashboardShell } from "@/components/DashboardShell";
 import { DataTable } from "@/components/DataTable";
-import { OpsMetricCard, SectionHeader } from "@/components/ProductOps";
+import { ListToolbar, OpsMetricCard, SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CreatePspForm, SupplierActionButtons } from "@/components/V15Forms";
 import { apiGet, money } from "@/lib/api";
@@ -49,6 +49,7 @@ export default async function AdminPspPage() {
         <OpsMetricCard label="今日利润" value={money(totalAmount * 0.018)} tone="success" trend="+4.5%" />
         <OpsMetricCard label="主/备通道" value={`${suppliers.flatMap((supplier) => supplier.channels ?? []).filter((channel) => channel.isPrimary).length}/${suppliers.flatMap((supplier) => supplier.channels ?? []).filter((channel) => channel.isBackup).length}`} tone="brand" trend="Routing" />
       </section>
+      <ListToolbar searchPlaceholder="搜索 PSP 名称、国家或 API 地址" statusLabel="全部 PSP 状态" />
       <section className="grid gap-6 xl:grid-cols-[.78fr_1.22fr]">
         <CreatePspForm />
         <div>

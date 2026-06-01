@@ -163,12 +163,17 @@ export function ChannelRoleButtons({ id }: { id: string }) {
   const { message, error, loading, run } = useAction();
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: () => void } | null>(null);
   return (
-    <div className="flex flex-wrap gap-2">
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => run(() => post(`/api/admin/channels/${id}`, {}, "PATCH"), "通道已保存")}>编辑</button>
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm({ title: "设为主通道", text: "确认将该通道设为同币种主通道吗？", action: () => void run(() => post(`/api/admin/channels/${id}/primary`, undefined, "PATCH"), "已设为主通道") })}>设为主通道</button>
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm({ title: "设为备用通道", text: "确认将该通道设为同币种备用通道吗？", action: () => void run(() => post(`/api/admin/channels/${id}/backup`, undefined, "PATCH"), "已设为备用通道") })}>设为备用通道</button>
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => run(() => post(`/api/admin/channels/${id}/enable`, undefined, "PATCH"), "通道已启用")}>启用</button>
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm({ title: "禁用通道", text: "禁用后商户将不能继续通过该通道收款。确认继续吗？", action: () => void run(() => post(`/api/admin/channels/${id}/disable`, undefined, "PATCH"), "通道已禁用") })}>禁用</button>
+    <div className="relative">
+      <details className="group">
+        <summary className="button secondary cursor-pointer px-3 py-2 text-xs">操作</summary>
+        <div className="absolute right-0 z-10 mt-2 grid w-40 gap-1 rounded-lg border border-line bg-white p-2 shadow-card">
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => run(() => post(`/api/admin/channels/${id}`, {}, "PATCH"), "通道已保存")}>编辑</button>
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm({ title: "设为主通道", text: "确认将该通道设为同币种主通道吗？", action: () => void run(() => post(`/api/admin/channels/${id}/primary`, undefined, "PATCH"), "已设为主通道") })}>设为主通道</button>
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm({ title: "设为备用通道", text: "确认将该通道设为同币种备用通道吗？", action: () => void run(() => post(`/api/admin/channels/${id}/backup`, undefined, "PATCH"), "已设为备用通道") })}>设为备用通道</button>
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => run(() => post(`/api/admin/channels/${id}/enable`, undefined, "PATCH"), "通道已启用")}>启用</button>
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm({ title: "禁用通道", text: "禁用后商户将不能继续通过该通道收款。确认继续吗？", action: () => void run(() => post(`/api/admin/channels/${id}/disable`, undefined, "PATCH"), "通道已禁用") })}>禁用</button>
+        </div>
+      </details>
       <ConfirmDialog open={!!confirm} title={confirm?.title ?? ""} text={confirm?.text ?? ""} confirmLabel="确认" onConfirm={() => { confirm?.action(); setConfirm(null); }} onCancel={() => setConfirm(null)} />
       <Toast message={message} type="success" />
       <Toast message={error} type="error" />
@@ -180,11 +185,15 @@ export function SupplierActionButtons({ id }: { id: string }) {
   const { message, error, loading, run } = useAction();
   const [confirm, setConfirm] = useState<"enable" | "disable" | null>(null);
   return (
-    <div className="flex flex-wrap gap-2">
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => run(() => post(`/api/admin/suppliers/${id}`, {}, "PATCH"), "PSP 已保存")}>编辑</button>
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm("enable")}>启用</button>
-      <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm("disable")}>禁用</button>
-      <a className="button secondary px-3 py-2 text-xs" href="/admin/channels">管理通道</a>
+    <div className="relative">
+      <details>
+        <summary className="button secondary cursor-pointer px-3 py-2 text-xs">操作</summary>
+        <div className="absolute right-0 z-10 mt-2 grid w-40 gap-1 rounded-lg border border-line bg-white p-2 shadow-card">
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => run(() => post(`/api/admin/suppliers/${id}`, {}, "PATCH"), "PSP 已保存")}>编辑</button>
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm("enable")}>启用</button>
+          <button disabled={loading} type="button" className="button secondary px-3 py-2 text-xs" onClick={() => setConfirm("disable")}>禁用</button>
+        </div>
+      </details>
       <ConfirmDialog
         open={!!confirm}
         title={confirm === "enable" ? "启用 PSP" : "禁用 PSP"}

@@ -1,8 +1,9 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
-import { SearchInput } from "@/components/SearchInput";
+import { Pagination } from "@/components/Pagination";
+import { ListToolbar, SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
-import { apiGet, money } from "@/lib/api";
+import { apiGet } from "@/lib/api";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -25,30 +26,20 @@ export default async function AdminAgentsPage() {
     agent.email ?? "-",
     <StatusBadge key={`${agent.id}-status`} status={agent.status} />,
     `${agent.merchants?.length ?? 0} 个商户`,
-    agent.commissionRate ? `${Number(agent.commissionRate) * 100}%` : money(0),
+    agent.commissionRate ? `${Number(agent.commissionRate) * 100}%` : "-",
     <div key={`${agent.id}-actions`} className="flex flex-wrap gap-2">
-      <Link className="button secondary px-3 py-2 text-xs" href={`/admin/agents/${agent.id}/fee-rules`}>设置费率权限</Link>
-      <Link className="button secondary px-3 py-2 text-xs" href="/admin/psp">管理可用 PSP</Link>
-      <Link className="button secondary px-3 py-2 text-xs" href="/admin/merchants">查看名下商户</Link>
+      <Link className="button secondary px-3 py-2 text-xs" href={`/admin/agents/${agent.id}`}>查看</Link>
     </div>,
   ]);
 
   return (
     <DashboardShell requiredRole="SUPER_ADMIN" title="代理商管理" role="Super Admin">
-      <div className="mb-6">
-        <h2 className="text-2xl font-black text-slate-950">代理商管理</h2>
-        <p className="mt-2 text-sm text-muted">查看代理商、名下商户数量，并进入代理费率权限配置。</p>
-      </div>
-      <div className="mb-4">
-        <SearchInput placeholder="搜索代理商、联系人或邮箱" />
-      </div>
-      <section id="fee-rules">
+      <SectionHeader eyebrow="代理体系" title="代理管理" status="ACTIVE" text="此页面只负责代理列表、代理状态和进入代理详情。最低费率、PSP 权限和名下商户在代理详情页处理。" />
+      <ListToolbar searchPlaceholder="搜索代理商、联系人或邮箱" statusLabel="全部代理状态" />
+      <section>
         <DataTable columns={["代理商", "联系人", "邮箱", "状态", "名下商户", "默认佣金", "操作"]} rows={rows} empty="暂无代理商。演示账号 seed 后会显示默认代理。" />
+        <Pagination page={1} totalPages={1} />
       </section>
-      <div className="mt-6 rounded-card border border-blue-100 bg-blue-50/70 p-5">
-        <h3 className="font-black text-slate-950">费率权限怎么理解？</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-700">平台先给代理设置最低商户费率。代理给商户设置 10% 或 12% 可以，设置 9% 会被系统拒绝。</p>
-      </div>
     </DashboardShell>
   );
 }

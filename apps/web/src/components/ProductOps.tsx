@@ -23,15 +23,35 @@ const toneBg: Record<Tone, string> = {
   neutral: "bg-slate-50 text-slate-700",
 };
 
-export function SectionHeader({ eyebrow, title, text, action }: { eyebrow?: string; title: string; text?: string; action?: ReactNode }) {
+export function SectionHeader({ eyebrow, title, text, status, action }: { eyebrow?: string; title: string; text?: string; status?: string; action?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         {eyebrow ? <p className="text-sm font-bold uppercase tracking-[.16em] text-brand">{eyebrow}</p> : null}
-        <h2 className="mt-1 text-2xl font-black text-slate-950">{title}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-black text-slate-950">{title}</h2>
+          {status ? <StatusBadge status={status} /> : null}
+        </div>
         {text ? <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">{text}</p> : null}
       </div>
       {action}
+    </div>
+  );
+}
+
+export function ListToolbar({ searchPlaceholder = "搜索记录", statusLabel = "全部状态" }: { searchPlaceholder?: string; statusLabel?: string }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="min-w-[260px] flex-1">
+        <input placeholder={searchPlaceholder} aria-label={searchPlaceholder} />
+      </div>
+      <select className="max-w-[180px]" aria-label="状态筛选" defaultValue="all">
+        <option value="all">{statusLabel}</option>
+        <option value="ACTIVE">ACTIVE</option>
+        <option value="PENDING">PENDING</option>
+        <option value="DISABLED">DISABLED</option>
+        <option value="FAILED">FAILED</option>
+      </select>
     </div>
   );
 }

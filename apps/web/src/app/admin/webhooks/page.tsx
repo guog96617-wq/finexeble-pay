@@ -1,6 +1,6 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
-import { OpsMetricCard, SectionHeader } from "@/components/ProductOps";
+import { ListToolbar, OpsMetricCard, SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
 import { apiGet } from "@/lib/api";
 
@@ -47,6 +47,7 @@ export default async function AdminWebhooksPage() {
         <OpsMetricCard label="最后响应" value={String(logs[0]?.responseStatus ?? "-")} tone="cyan" trend="Latest" />
       </section>
       <section className="mt-8">
+        <ListToolbar searchPlaceholder="搜索 Webhook URL、订单号或错误信息" statusLabel="全部 Webhook 状态" />
         <DataTable columns={["Webhook URL", "最近状态", "成功率", "失败次数", "最后响应", "最后错误", "操作"]} rows={rows} empty="暂无 Webhook 日志。" />
       </section>
     </DashboardShell>
