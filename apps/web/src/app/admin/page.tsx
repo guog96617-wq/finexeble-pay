@@ -86,7 +86,7 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <DashboardShell title="Super Admin Console" role="Super Admin" nav={[["Dashboard", "#dashboard"], ["Merchants", "#merchants"], ["Agents", "#agents"], ["PSP", "#psp"], ["Orders", "#orders"], ["Finance", "#withdraws"], ["Routing", "#routing"], ["Plugins", "#plugins"], ["Security", "#security"], ["Settings", "#settings"]]}>
+    <DashboardShell requiredRole="SUPER_ADMIN" title="Super Admin Console" role="Super Admin" nav={[["Dashboard", "#dashboard"], ["Merchants", "#merchants"], ["Agents", "#agents"], ["PSP", "#psp"], ["Orders", "#orders"], ["Finance", "#withdraws"], ["Routing", "#routing"], ["Plugins", "#plugins"], ["Security", "#security"], ["Settings", "#settings"]]}>
       <section className="grid-fit">
         {stats.map((stat) => (
           <MetricCard key={stat.label} {...stat} />

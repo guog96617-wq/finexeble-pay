@@ -73,7 +73,7 @@ export default async function MerchantPage() {
   const withdrawRows = withdraws.map((withdraw) => [withdraw.withdrawNo, <StatusBadge key={`${withdraw.withdrawNo}-status`} status={withdraw.status} />, money(withdraw.amount, withdraw.currency)]);
 
   return (
-    <DashboardShell title="Merchant Center" role="Merchant Admin" nav={[["Dashboard", "#dashboard"], ["Orders", "#orders"], ["Finance", "#wallet"], ["Developer", "#api"], ["SDK", "#sdk"], ["Plugins", "#plugins"], ["Account", "#account"]]}>
+    <DashboardShell requiredRole="MERCHANT_ADMIN" title="Merchant Center" role="Merchant Admin" nav={[["Dashboard", "#dashboard"], ["Orders", "#orders"], ["Finance", "#wallet"], ["Developer", "#api"], ["SDK", "#sdk"], ["Plugins", "#plugins"], ["Account", "#account"]]}>
       <section className="grid-fit">
         {merchantStats.map((stat) => (
           <MetricCard key={stat.label} {...stat} />

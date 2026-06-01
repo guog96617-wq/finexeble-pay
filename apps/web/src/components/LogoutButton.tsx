@@ -2,12 +2,13 @@
 
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { clearAuth } from "@/lib/auth";
 
 export function LogoutButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
 
   function logout() {
-    localStorage.removeItem("payhub.auth");
+    clearAuth();
     router.push("/login");
   }
 

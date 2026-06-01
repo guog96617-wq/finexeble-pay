@@ -1,17 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { roleHome, saveAuth, StoredAuth } from "@/lib/auth";
 import { BrandLogo } from "./BrandLogo";
 import { Toast } from "./Toast";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
-
-const roleHome: Record<string, string> = {
-  SUPER_ADMIN: "/admin",
-  MERCHANT_ADMIN: "/merchant",
-  AGENT_ADMIN: "/agent",
-};
 
 export function LoginForm() {
   const router = useRouter();
@@ -20,6 +15,16 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reason") === "expired") {
+      setNotice("登录已过期，请重新登录");
+    } else if (params.get("next")) {
+      setNotice("请先登录后继续访问后台。");
+    }
+  }, []);
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,8 +42,8 @@ export function LoginForm() {
         setError(payload.error?.message ?? "Login failed. Please check your email and password.");
         return;
       }
-      localStorage.setItem("payhub.auth", JSON.stringify(payload.data));
-      router.push(roleHome[payload.data.user.role] ?? "/");
+      saveAuth(payload.data as StoredAuth, remember);
+      router.push(roleHome[payload.data.user.role as keyof typeof roleHome] ?? "/");
     } catch {
       setError("Operation failed. Please try again later or contact the administrator.");
     } finally {
@@ -67,6 +72,7 @@ export function LoginForm() {
         <span className="font-semibold">Remember me</span>
         <input className="h-4 w-4 p-0" type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
       </label>
+      <Toast message={notice} type="info" />
       <Toast message={error} type="error" />
       <button type="submit" disabled={loading}>
         {loading ? "Signing in..." : "Sign in"}
