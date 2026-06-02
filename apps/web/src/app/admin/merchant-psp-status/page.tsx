@@ -17,15 +17,11 @@ type MerchantStatusRow = {
     isPrimary: boolean;
     isBackup: boolean;
     merchantFeeRate?: string;
-    channel: {
-      name: string;
-      paymentMethod: string;
-      supplier?: { name: string; status: string };
-    };
+    channel: { name: string; paymentMethod: string; currency: string };
   }[];
 };
 
-export default async function AdminMerchantPspStatusPage() {
+export default async function AdminMerchantChannelStatusPage() {
   const merchants = await apiGet<MerchantStatusRow[]>("/api/admin/merchant-psp-status", []);
   const rows = merchants.map((merchant) => {
     const enabled = merchant.merchantChannels?.filter((item) => item.isEnabled) ?? [];
@@ -33,31 +29,31 @@ export default async function AdminMerchantPspStatusPage() {
     const backup = enabled.find((item) => item.isBackup);
     return [
       merchant.name,
-      merchant.agent?.name ?? "平台直属",
+      merchant.agent?.name ?? "Platform direct",
       `${enabled.length}`,
-      primary?.channel.name ?? "未设置",
-      backup?.channel.name ?? "未设置",
-      enabled.map((item) => `${item.channel.supplier?.name ?? "-"} / ${item.channel.name}`).join(" | ") || "-",
+      primary?.channel.name ?? "Not set",
+      backup?.channel.name ?? "Not set",
+      enabled.map((item) => `${item.channel.name} (${item.channel.paymentMethod}/${item.channel.currency})`).join(" | ") || "-",
       <StatusBadge key={`${merchant.id}-status`} status={enabled.length ? "ACTIVE" : "PENDING"} />,
-      <Link key={`${merchant.id}-config`} className="button secondary px-3 py-2 text-xs" href={`/admin/merchants/${merchant.id}/psp`}>
-        配置商户 PSP
+      <Link key={`${merchant.id}-detail`} className="button secondary px-3 py-2 text-xs" href={`/admin/merchants/${merchant.id}`}>
+        Merchant detail
       </Link>,
     ];
   });
 
   return (
-    <DashboardShell requiredRole="SUPER_ADMIN" title="Merchant PSP Status" role="Super Admin">
+    <DashboardShell requiredRole="SUPER_ADMIN" title="Merchant Channel Supervision" role="Super Admin">
       <SectionHeader
-        eyebrow="费率与利润"
-        title="商户 PSP 配置总览"
-        text="查看每个商户当前开通的 PSP、主备通道和启用状态。"
+        eyebrow="Merchant supervision"
+        title="Merchant channel overview"
+        text="Read-only overview of merchant channels, primary routing, backup routing and enabled status. Merchant channel authorization is handled by the agent inside a merchant detail page."
         status="ACTIVE"
       />
-      <ListToolbar searchPlaceholder="搜索商户、代理或通道" statusLabel="全部配置状态" />
+      <ListToolbar searchPlaceholder="Search merchant, agent or channel" statusLabel="All channel states" />
       <DataTable
-        columns={["商户", "所属代理", "已启用通道", "主通道", "备用通道", "已开通 PSP / 通道", "状态", "操作"]}
+        columns={["Merchant", "Agent", "Enabled channels", "Primary", "Backup", "Opened channels", "Status", "Action"]}
         rows={rows}
-        empty="暂无商户 PSP 配置。"
+        empty="No merchant channel configuration."
       />
     </DashboardShell>
   );

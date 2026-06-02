@@ -57,10 +57,19 @@ enum WalletTransactionType {
   PAYMENT_IN
   REFUND_OUT
   FEE_OUT
+  MERCHANT_FEE_OUT
+  ROLLING_RESERVE_HOLD
   WITHDRAW_FREEZE
   WITHDRAW_SUCCESS
+  WITHDRAW_PAID
   WITHDRAW_FAILED
   ADJUSTMENT
+}
+
+enum RollingReserveStatus {
+  HELD
+  RELEASED
+  DEDUCTED
 }
 
 enum WithdrawStatus {
@@ -114,6 +123,7 @@ model Agent {
   users     User[]
   feeRules  AgentFeeRule[]
   withdrawRules WithdrawRule[]
+  agentChannels AgentChannel[]
 
   @@map("agents")
 }
@@ -144,6 +154,7 @@ model Merchant {
   webhookLogs        WebhookLog[]
   merchantChannels   MerchantChannel[]
   withdrawRules      WithdrawRule[]
+  rollingReserveRecords RollingReserveRecord[]
 
   @@map("merchants")
 }
@@ -166,12 +177,21 @@ model Supplier {
 
 model Channel {
   id            String   @id @default(cuid())
-  supplierId    String   @map("supplier_id")
+  supplierId    String?  @map("supplier_id")
   name          String
+  supplierName  String?  @map("supplier_name")
+  supplierContactName String? @map("supplier_contact_name")
+  supplierApiBaseUrl String? @map("supplier_api_base_url")
+  supplierNote  String?  @map("supplier_note")
   paymentMethod PaymentMethod @map("payment_method")
   country       String?
   currency      String
   feeRate       Decimal  @default(0.02) @map("fee_rate") @db.Decimal(8, 4)
+  pspCostRate   Decimal  @default(0.02) @map("psp_cost_rate") @db.Decimal(8, 4)
+  pspFixedFee   Decimal  @default(0) @map("psp_fixed_fee") @db.Decimal(18, 2)
+  rollingReserveRate Decimal @default(0) @map("rolling_reserve_rate") @db.Decimal(8, 4)
+  rollingReserveDays Int @default(0) @map("rolling_reserve_days")
+  description   String?
   priority      Int      @default(100)
   isPrimary     Boolean  @default(false) @map("is_primary")
   isBackup      Boolean  @default(false) @map("is_backup")
@@ -179,12 +199,32 @@ model Channel {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  supplier Supplier @relation(fields: [supplierId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
   orders   Order[]
   attempts PaymentAttempt[]
   merchantChannels MerchantChannel[]
+  agentChannels AgentChannel[]
+  rollingReserveRecords RollingReserveRecord[]
 
   @@map("channels")
+}
+
+model AgentChannel {
+  id              String   @id @default(cuid())
+  agentId         String   @map("agent_id")
+  channelId       String   @map("channel_id")
+  isEnabled       Boolean  @default(true) @map("is_enabled")
+  agentFeeRate    Decimal  @default(0.1) @map("agent_fee_rate") @db.Decimal(8, 4)
+  agentFixedFee   Decimal  @default(0) @map("agent_fixed_fee") @db.Decimal(18, 2)
+  note            String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  agent   Agent   @relation(fields: [agentId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@unique([agentId, channelId])
+  @@map("agent_channels")
 }
 
 model Order {
@@ -197,6 +237,13 @@ model Order {
   currency        String
   feeAmount       Decimal  @default(0) @map("fee_amount") @db.Decimal(18, 2)
   netAmount       Decimal  @default(0) @map("net_amount") @db.Decimal(18, 2)
+  merchantFeeAmount Decimal @default(0) @map("merchant_fee_amount") @db.Decimal(18, 2)
+  agentProfitAmount Decimal @default(0) @map("agent_profit_amount") @db.Decimal(18, 2)
+  platformProfitAmount Decimal @default(0) @map("platform_profit_amount") @db.Decimal(18, 2)
+  pspCostAmount Decimal @default(0) @map("psp_cost_amount") @db.Decimal(18, 2)
+  merchantNetBeforeReserve Decimal @default(0) @map("merchant_net_before_reserve") @db.Decimal(18, 2)
+  rollingReserveAmount Decimal @default(0) @map("rolling_reserve_amount") @db.Decimal(18, 2)
+  merchantAvailableAmount Decimal @default(0) @map("merchant_available_amount") @db.Decimal(18, 2)
   status          OrderStatus @default(PENDING)
   paymentUrl      String?  @map("payment_url")
   customerEmail   String?  @map("customer_email")
@@ -211,6 +258,7 @@ model Order {
   attempts PaymentAttempt[]
   refunds  Refund[]
   webhookLogs WebhookLog[]
+  rollingReserveRecords RollingReserveRecord[]
 
   @@map("orders")
 }
@@ -255,6 +303,7 @@ model Wallet {
   balance          Decimal  @default(0) @db.Decimal(18, 2)
   availableBalance Decimal  @default(0) @map("available_balance") @db.Decimal(18, 2)
   frozenBalance    Decimal  @default(0) @map("frozen_balance") @db.Decimal(18, 2)
+  rollingReserveBalance Decimal @default(0) @map("rolling_reserve_balance") @db.Decimal(18, 2)
   currency         String   @default("USD")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -314,9 +363,6 @@ model MerchantChannel {
   isBackup            Boolean  @default(false) @map("is_backup")
   merchantFeeRate     Decimal  @default(0.029) @map("merchant_fee_rate") @db.Decimal(8, 4)
   merchantFixedFee    Decimal  @default(0) @map("merchant_fixed_fee") @db.Decimal(18, 2)
-  pspCostRate         Decimal  @default(0.018) @map("psp_cost_rate") @db.Decimal(8, 4)
-  pspFixedFee         Decimal  @default(0) @map("psp_fixed_fee") @db.Decimal(18, 2)
-  agentCommissionRate Decimal  @default(0) @map("agent_commission_rate") @db.Decimal(8, 4)
   minFee              Decimal  @default(0) @map("min_fee") @db.Decimal(18, 2)
   maxFee              Decimal? @map("max_fee") @db.Decimal(18, 2)
   createdAt           DateTime @default(now()) @map("created_at")
@@ -327,6 +373,27 @@ model MerchantChannel {
 
   @@unique([merchantId, channelId])
   @@map("merchant_channels")
+}
+
+model RollingReserveRecord {
+  id             String   @id @default(cuid())
+  merchantId     String   @map("merchant_id")
+  orderId        String   @map("order_id")
+  channelId      String   @map("channel_id")
+  amount         Decimal  @db.Decimal(18, 2)
+  status         RollingReserveStatus @default(HELD)
+  holdDays       Int      @default(0) @map("hold_days")
+  releaseAt      DateTime? @map("release_at")
+  releasedAt     DateTime? @map("released_at")
+  deductedAmount Decimal  @default(0) @map("deducted_amount") @db.Decimal(18, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  order    Order    @relation(fields: [orderId], references: [id])
+  channel  Channel  @relation(fields: [channelId], references: [id])
+
+  @@map("rolling_reserve_records")
 }
 
 model WithdrawRule {

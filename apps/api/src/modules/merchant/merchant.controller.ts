@@ -12,11 +12,6 @@ export class MerchantController {
     return this.merchant.dashboard();
   }
 
-  @Post("orders")
-  createOrder(@Body() body: Record<string, unknown>) {
-    return this.merchant.createManualOrder(body);
-  }
-
   @Get("orders")
   orders() {
     return this.merchant.orders();

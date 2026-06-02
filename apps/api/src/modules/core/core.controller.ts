@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { CoreService } from "./core.service";
 
@@ -27,6 +27,16 @@ export class CoreController {
     return this.core.getMerchant(id);
   }
 
+  @Patch("merchants/:id/channels/disable-all")
+  disableMerchantChannels(@Param("id") id: string) {
+    return this.core.setMerchantChannelsStatus(id, false);
+  }
+
+  @Patch("merchants/:id/channels/enable-all")
+  enableMerchantChannels(@Param("id") id: string) {
+    return this.core.setMerchantChannelsStatus(id, true);
+  }
+
   @Get("merchants/:id/psp")
   merchantPsp(@Param("id") id: string) {
     return this.core.merchantPspStatus(id);
@@ -50,6 +60,26 @@ export class CoreController {
   @Post("agents")
   createAgent(@Body() body: Record<string, unknown>) {
     return this.core.createAgent(body);
+  }
+
+  @Get("agents/:id")
+  agent(@Param("id") id: string) {
+    return this.core.getAgent(id);
+  }
+
+  @Post("agents/:agentId/channels/:channelId")
+  authorizeAgentChannel(@Param("agentId") agentId: string, @Param("channelId") channelId: string, @Body() body: Record<string, unknown>) {
+    return this.core.upsertAgentChannel(agentId, channelId, body);
+  }
+
+  @Patch("agents/:agentId/channels/:channelId")
+  updateAgentChannel(@Param("agentId") agentId: string, @Param("channelId") channelId: string, @Body() body: Record<string, unknown>) {
+    return this.core.upsertAgentChannel(agentId, channelId, body);
+  }
+
+  @Delete("agents/:agentId/channels/:channelId")
+  removeAgentChannel(@Param("agentId") agentId: string, @Param("channelId") channelId: string) {
+    return this.core.removeAgentChannel(agentId, channelId);
   }
 
   @Get("suppliers")

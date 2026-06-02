@@ -115,18 +115,29 @@ const psp = data(await check("V1.5-1. Admin 可新增 PSP", () => request(apiBas
 const channel = data(await check("V1.5-2. Admin 可新增通道", () => request(apiBaseUrl, "/api/admin/channels", {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ supplierId: psp.id, name: `Smoke Sandbox ${stamp}`, paymentMethod: "SANDBOX_PAY", currency: "USD", feeRate: "0.018" }),
+  body: JSON.stringify({
+    supplierId: psp.id,
+    supplierName: psp.name,
+    supplierApiBaseUrl: psp.apiBaseUrl,
+    name: `Smoke Sandbox ${stamp}`,
+    paymentMethod: "SANDBOX_PAY",
+    currency: "USD",
+    feeRate: "0.05",
+    pspCostRate: "0.05",
+    pspFixedFee: "0",
+    rollingReserveRate: "0.05",
+    rollingReserveDays: 7,
+  }),
 })));
 
-await check("V1.5-3. Admin 可设置代理最低费率", () => request(apiBaseUrl, `/api/admin/agents/${demoAgent.id}/fee-rules`, {
+await check("V1.7-3. Admin 在代理详情授权通道", () => request(apiBaseUrl, `/api/admin/agents/${demoAgent.id}/channels/${channel.id}`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
-    minMerchantFeeRate: "0.10",
-    minWithdrawFeeRate: "0.01",
-    allowedPaymentMethods: ["CARD", "LOCAL_PAYMENT", "BANK_TRANSFER", "SANDBOX_PAY"],
-    allowedSupplierIds: [psp.id],
-    allowedChannelIds: [channel.id],
+    agentFeeRate: "0.10",
+    agentFixedFee: "0.00",
+    isEnabled: true,
+    note: "Smoke authorization",
   }),
 }));
 
@@ -202,19 +213,40 @@ await check("V1.5-18. 提现最高金额校验生效", async () => {
 });
 
 const walletBefore = data(await request(apiBaseUrl, "/api/merchant/wallet"));
-const manualOrder = data(await check("V1.5-10. Merchant 创建订单生成 payment_url", () => request(apiBaseUrl, "/api/merchant/orders", {
+const checkoutOrderBody = {
+  merchantOrderNo: `CHECKOUT-${stamp}`,
+  amount: "20.00",
+  currency: "USD",
+  customerEmail: "buyer@example.com",
+};
+const checkoutBody = JSON.stringify(checkoutOrderBody);
+const checkoutTimestamp = String(Date.now());
+const checkoutNonce = crypto.randomUUID();
+const manualOrder = data(await check("V1.7-10. API 创建订单生成 payment_url", () => request(apiBaseUrl, "/api/v1/payments/create", {
   method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({
-    merchantOrderNo: `CHECKOUT-${stamp}`,
-    amount: "20.00",
-    currency: "USD",
-    customerEmail: "buyer@example.com",
-  }),
+  headers: {
+    "content-type": "application/json",
+    "x-api-key": apiKey,
+    "x-timestamp": checkoutTimestamp,
+    "x-nonce": checkoutNonce,
+    "x-signature": sign(checkoutTimestamp, checkoutNonce, checkoutBody),
+  },
+  body: checkoutBody,
 })));
 if (!manualOrder.paymentUrl || !manualOrder.paymentUrl.includes(`/checkout/${manualOrder.orderNo}`)) {
   throw new Error(`Expected checkout payment_url, got ${manualOrder.paymentUrl}`);
 }
+
+await check("V1.7-10b. Merchant 后台手动创建订单已取消", async () => {
+  const { response } = await raw("/api/merchant/orders", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ merchantOrderNo: `MANUAL-${stamp}`, amount: "20.00", currency: "USD" }),
+  });
+  if (response.status !== 404) {
+    throw new Error(`Expected merchant manual order endpoint to be removed, got ${response.status}`);
+  }
+});
 
 await expectStatus("V1.5-11. 打开 /checkout/[orderNo]", webBaseUrl, `/checkout/${manualOrder.orderNo}`, 200);
 const checkoutPaid = data(await check("V1.5-12. Pay Success 后订单变 PAID", () => request(apiBaseUrl, `/api/checkout/${manualOrder.orderNo}/pay`, {
@@ -228,9 +260,16 @@ if (checkoutPaid.order.status !== "PAID") {
 const checkoutOrder = data(await request(apiBaseUrl, `/api/v1/orders/${manualOrder.orderNo}`));
 await check("V1.5-13. fee_amount / net_amount 正确", async () => {
   const expectedFee = 20 * 0.12 + 0.3;
-  const expectedNet = 20 - expectedFee;
-  if (Math.abs(Number(checkoutOrder.feeAmount) - expectedFee) > 0.01 || Math.abs(Number(checkoutOrder.netAmount) - expectedNet) > 0.01) {
-    throw new Error(`Expected fee/net ${expectedFee}/${expectedNet}, got ${checkoutOrder.feeAmount}/${checkoutOrder.netAmount}`);
+  const expectedNetBeforeReserve = 20 - expectedFee;
+  const expectedReserve = expectedNetBeforeReserve * 0.05;
+  const expectedAvailable = expectedNetBeforeReserve - expectedReserve;
+  if (
+    Math.abs(Number(checkoutOrder.merchantFeeAmount) - expectedFee) > 0.01 ||
+    Math.abs(Number(checkoutOrder.merchantNetBeforeReserve) - expectedNetBeforeReserve) > 0.01 ||
+    Math.abs(Number(checkoutOrder.rollingReserveAmount) - expectedReserve) > 0.01 ||
+    Math.abs(Number(checkoutOrder.merchantAvailableAmount) - expectedAvailable) > 0.01
+  ) {
+    throw new Error(`Expected fee/net/reserve/available ${expectedFee}/${expectedNetBeforeReserve}/${expectedReserve}/${expectedAvailable}, got ${checkoutOrder.merchantFeeAmount}/${checkoutOrder.merchantNetBeforeReserve}/${checkoutOrder.rollingReserveAmount}/${checkoutOrder.merchantAvailableAmount}`);
   }
 });
 

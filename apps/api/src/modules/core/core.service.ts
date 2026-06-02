@@ -46,7 +46,24 @@ export class CoreService {
   getMerchant(id: string) {
     return this.prisma.merchant.findUnique({
       where: { id },
-      include: { agent: true, users: true, orders: true, wallet: true, apiKeys: true, webhooks: true },
+      include: {
+        agent: true,
+        users: true,
+        orders: true,
+        wallet: true,
+        apiKeys: true,
+        webhooks: true,
+        merchantChannels: { include: { channel: true }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }] },
+      },
+    });
+  }
+
+  setMerchantChannelsStatus(id: string, isEnabled: boolean) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.merchantChannel.updateMany({ where: { merchantId: id }, data: { isEnabled } });
+      const merchant = await tx.merchant.findUnique({ where: { id }, include: { merchantChannels: { include: { channel: true } }, wallet: true } });
+      await tx.auditLog.create({ data: { action: isEnabled ? "admin.merchant_channels.enable_all" : "admin.merchant_channels.disable_all", module: "channels", afterData: { merchantId: id, isEnabled } } });
+      return merchant;
     });
   }
 
@@ -55,7 +72,32 @@ export class CoreService {
   }
 
   listAgents() {
-    return this.prisma.agent.findMany({ include: { merchants: true }, orderBy: { createdAt: "desc" } });
+    return this.prisma.agent.findMany({ include: { merchants: true, agentChannels: { include: { channel: true } } }, orderBy: { createdAt: "desc" } });
+  }
+
+  async getAgent(id: string) {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id },
+      include: {
+        merchants: { include: { orders: true, wallet: true } },
+        agentChannels: { include: { channel: true }, orderBy: { createdAt: "desc" } },
+      },
+    });
+    if (!agent) {
+      throw new BadRequestException("Agent not found");
+    }
+    const paidOrders = agent.merchants.flatMap((merchant) => merchant.orders.filter((order) => order.status === "PAID"));
+    const todayVolume = paidOrders.reduce((sum, order) => sum + Number(order.amount), 0);
+    const todayProfit = paidOrders.reduce((sum, order) => sum + Number(order.agentProfitAmount), 0);
+    return {
+      ...agent,
+      metrics: {
+        merchantCount: agent.merchants.length,
+        todayVolume: todayVolume.toFixed(2),
+        todayProfit: todayProfit.toFixed(2),
+        authorizedChannelCount: agent.agentChannels.length,
+      },
+    };
   }
 
   createAgent(body: Record<string, unknown>) {
@@ -225,11 +267,19 @@ export class CoreService {
   }
 
   listChannels() {
-    return this.prisma.channel.findMany({ include: { supplier: true }, orderBy: [{ priority: "asc" }] });
+    return this.prisma.channel.findMany({
+      include: {
+        supplier: true,
+        agentChannels: true,
+        merchantChannels: true,
+        orders: { where: { status: "PAID" } },
+      },
+      orderBy: [{ priority: "asc" }],
+    });
   }
 
   async getChannel(id: string) {
-    const channel = await this.prisma.channel.findUnique({ where: { id }, include: { supplier: true } });
+    const channel = await this.prisma.channel.findUnique({ where: { id }, include: { supplier: true, agentChannels: true, merchantChannels: true } });
     if (!channel) {
       throw new BadRequestException("Channel not found");
     }
@@ -237,15 +287,12 @@ export class CoreService {
   }
 
   createChannel(body: Record<string, unknown>) {
-    if (!body.supplierId) {
-      throw new BadRequestException("Please select a PSP");
-    }
     if (!body.name) {
       throw new BadRequestException("Channel name is required");
     }
     return this.prisma.$transaction(async (tx) => {
       const channel = await tx.channel.create({ data: this.channelData(body) as any });
-      await tx.auditLog.create({ data: { action: "admin.channel.create", module: "psp", afterData: channel } });
+      await tx.auditLog.create({ data: { action: "admin.channel.create", module: "channels", afterData: channel } });
       return channel;
     });
   }
@@ -257,8 +304,41 @@ export class CoreService {
         throw new BadRequestException("Channel not found");
       }
       const channel = await tx.channel.update({ where: { id }, data: this.channelData(body, true) });
-      await tx.auditLog.create({ data: { action: "admin.channel.update", module: "psp", beforeData: before ?? undefined, afterData: channel } });
+      await tx.auditLog.create({ data: { action: "admin.channel.update", module: "channels", beforeData: before ?? undefined, afterData: channel } });
       return channel;
+    });
+  }
+
+  async upsertAgentChannel(agentId: string, channelId: string, body: Record<string, unknown>) {
+    const channel = await this.prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) {
+      throw new BadRequestException("Channel not found");
+    }
+    const agentFeeRate = new Prisma.Decimal(String(body.agentFeeRate ?? channel.pspCostRate));
+    if (agentFeeRate.lt(channel.pspCostRate)) {
+      throw new BadRequestException("Agent channel fee rate cannot be lower than channel PSP cost rate.");
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.agentChannel.upsert({
+        where: { agentId_channelId: { agentId, channelId } },
+        update: this.agentChannelData(body, channel.pspCostRate),
+        create: {
+          agentId,
+          channelId,
+          ...this.agentChannelData(body, channel.pspCostRate),
+        } as any,
+        include: { agent: true, channel: true },
+      });
+      await tx.auditLog.create({ data: { action: "admin.agent_channel.upsert", module: "channels", afterData: JSON.parse(JSON.stringify(result)) } });
+      return result;
+    });
+  }
+
+  async removeAgentChannel(agentId: string, channelId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.agentChannel.delete({ where: { agentId_channelId: { agentId, channelId } } });
+      await tx.auditLog.create({ data: { action: "admin.agent_channel.remove", module: "channels", afterData: { agentId, channelId } } });
+      return { agentId, channelId, removed: true };
     });
   }
 
@@ -402,12 +482,21 @@ export class CoreService {
 
   private channelData(body: Record<string, unknown>, partial = false): Prisma.ChannelUncheckedCreateInput | Prisma.ChannelUncheckedUpdateInput {
     return {
-      supplierId: body.supplierId || partial ? (body.supplierId ? String(body.supplierId) : undefined) : String(body.supplierId),
+      supplierId: body.supplierId ? String(body.supplierId) : undefined,
       name: body.name || partial ? (body.name ? String(body.name) : undefined) : String(body.name),
+      supplierName: body.supplierName ? String(body.supplierName) : partial ? undefined : "Mock Supplier",
+      supplierContactName: body.supplierContactName ? String(body.supplierContactName) : undefined,
+      supplierApiBaseUrl: body.supplierApiBaseUrl ? String(body.supplierApiBaseUrl) : undefined,
+      supplierNote: body.supplierNote ? String(body.supplierNote) : undefined,
       paymentMethod: body.paymentMethod ? this.paymentMethod(body.paymentMethod) : partial ? undefined : "CARD",
       country: body.country ? String(body.country) : undefined,
       currency: body.currency ? String(body.currency) : partial ? undefined : "USD",
       feeRate: body.feeRate !== undefined ? new Prisma.Decimal(String(body.feeRate)) : partial ? undefined : new Prisma.Decimal("0.02"),
+      pspCostRate: body.pspCostRate !== undefined ? new Prisma.Decimal(String(body.pspCostRate)) : body.feeRate !== undefined ? new Prisma.Decimal(String(body.feeRate)) : partial ? undefined : new Prisma.Decimal("0.02"),
+      pspFixedFee: body.pspFixedFee !== undefined ? new Prisma.Decimal(String(body.pspFixedFee)) : partial ? undefined : new Prisma.Decimal("0"),
+      rollingReserveRate: body.rollingReserveRate !== undefined ? new Prisma.Decimal(String(body.rollingReserveRate)) : partial ? undefined : new Prisma.Decimal("0"),
+      rollingReserveDays: body.rollingReserveDays !== undefined ? Number(body.rollingReserveDays) : partial ? undefined : 0,
+      description: body.description ? String(body.description) : undefined,
       priority: body.priority !== undefined ? Number(body.priority) : partial ? undefined : 100,
       isPrimary: body.isPrimary !== undefined ? Boolean(body.isPrimary) : partial ? undefined : false,
       isBackup: body.isBackup !== undefined ? Boolean(body.isBackup) : partial ? undefined : false,
@@ -422,11 +511,17 @@ export class CoreService {
       isBackup: body.isBackup !== undefined ? Boolean(body.isBackup) : false,
       merchantFeeRate: body.merchantFeeRate !== undefined ? new Prisma.Decimal(String(body.merchantFeeRate)) : new Prisma.Decimal("0.029"),
       merchantFixedFee: body.merchantFixedFee !== undefined ? new Prisma.Decimal(String(body.merchantFixedFee)) : new Prisma.Decimal("0"),
-      pspCostRate: body.pspCostRate !== undefined ? new Prisma.Decimal(String(body.pspCostRate)) : new Prisma.Decimal("0.018"),
-      pspFixedFee: body.pspFixedFee !== undefined ? new Prisma.Decimal(String(body.pspFixedFee)) : new Prisma.Decimal("0"),
-      agentCommissionRate: body.agentCommissionRate !== undefined ? new Prisma.Decimal(String(body.agentCommissionRate)) : new Prisma.Decimal("0"),
       minFee: body.minFee !== undefined ? new Prisma.Decimal(String(body.minFee)) : new Prisma.Decimal("0"),
       maxFee: body.maxFee !== undefined && body.maxFee !== "" ? new Prisma.Decimal(String(body.maxFee)) : null,
+    };
+  }
+
+  private agentChannelData(body: Record<string, unknown>, defaultRate: Prisma.Decimal): Prisma.AgentChannelUncheckedUpdateInput {
+    return {
+      isEnabled: body.isEnabled !== undefined ? Boolean(body.isEnabled) : true,
+      agentFeeRate: body.agentFeeRate !== undefined ? new Prisma.Decimal(String(body.agentFeeRate)) : defaultRate,
+      agentFixedFee: body.agentFixedFee !== undefined ? new Prisma.Decimal(String(body.agentFixedFee)) : new Prisma.Decimal("0"),
+      note: body.note ? String(body.note) : undefined,
     };
   }
 

@@ -1,56 +1,65 @@
 import { DashboardShell } from "@/components/DashboardShell";
-import { MerchantChannelForm } from "@/components/V15Forms";
-import { SectionHeader } from "@/components/ProductOps";
-import { apiGet } from "@/lib/api";
+import { OpsMetricCard, SectionHeader } from "@/components/ProductOps";
+import { StatusBadge } from "@/components/StatusBadge";
+import { apiGet, money } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-type MerchantGroup = {
+type AgentChannel = {
   id: string;
-  name: string;
-  merchantChannels?: {
-    channelId: string;
-    isEnabled?: boolean;
-    isPrimary?: boolean;
-    isBackup?: boolean;
-    channel: { name: string; paymentMethod: string; supplier?: { name: string } };
-  }[];
+  isEnabled: boolean;
+  agentFeeRate: string;
+  agentFixedFee: string;
+  channel: {
+    name: string;
+    paymentMethod: string;
+    country?: string | null;
+    currency: string;
+    status: string;
+    pspCostRate?: string;
+    rollingReserveRate?: string;
+    rollingReserveDays?: number;
+  };
 };
 
+function rate(value?: string) {
+  return `${(Number(value ?? 0) * 100).toFixed(2)}%`;
+}
+
 export default async function AgentPaymentMethodsPage() {
-  const groups = await apiGet<MerchantGroup[]>("/api/agent/payment-methods", []);
+  const channels = await apiGet<AgentChannel[]>("/api/agent/payment-methods", []);
+
   return (
-    <DashboardShell requiredRole="AGENT_ADMIN" title="Merchant PSP Settings" role="Agent Admin">
+    <DashboardShell requiredRole="AGENT_ADMIN" title="My Available Channels" role="Agent Admin">
       <SectionHeader
-        eyebrow="Merchant Operations"
-        title="商户 PSP 开关"
-        text="该页面只负责为名下商户管理 PSP / 通道开关、主备通道。"
+        eyebrow="Channel operations"
+        title="My available channels"
+        text="These channels were authorized by the platform. Open merchant channels from a specific merchant detail page."
         status="ACTIVE"
       />
-      <div className="grid gap-4">
-        {groups.map((merchant) => (
-          <section key={merchant.id} className="surface p-4">
-            <h2 className="text-lg font-black text-slate-950">{merchant.name}</h2>
-            <p className="mt-1 text-sm text-muted">可按商户逐个通道管理启用状态与主备角色。</p>
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              {merchant.merchantChannels?.map((item) => (
-                <div key={item.channelId} className="rounded-xl border border-line p-3">
-                  <div className="mb-2 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold text-slate-900">{item.channel.name}</p>
-                      <p className="text-sm text-muted">{item.channel.supplier?.name ?? "Unknown PSP"} / {item.channel.paymentMethod}</p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
-                      {item.isPrimary ? "主通道" : item.isBackup ? "备用通道" : (item.isEnabled ? "已启用" : "已停用")}
-                    </span>
-                  </div>
-                  <MerchantChannelForm merchantId={merchant.id} channelId={item.channelId} agent />
-                </div>
-              ))}
+      <section className="grid-fit">
+        <OpsMetricCard label="Authorized channels" value={String(channels.length)} tone="brand" trend="Available" />
+        <OpsMetricCard label="Enabled channels" value={String(channels.filter((item) => item.isEnabled).length)} tone="success" trend="Usable" />
+        <OpsMetricCard label="Disabled channels" value={String(channels.filter((item) => !item.isEnabled).length)} tone="warn" trend="Paused" />
+      </section>
+      <section className="mt-8 grid gap-4">
+        {channels.map((item) => (
+          <article key={item.id} className="surface p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-black text-slate-950">{item.channel.name}</h2>
+                <p className="mt-1 text-sm text-muted">{item.channel.paymentMethod} / {item.channel.country ?? "GLOBAL"} / {item.channel.currency}</p>
+              </div>
+              <StatusBadge status={item.isEnabled && item.channel.status === "ACTIVE" ? "ACTIVE" : "DISABLED"} />
             </div>
-          </section>
+            <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-3">
+              <p><b>My channel cost:</b> {rate(item.agentFeeRate)} + {money(item.agentFixedFee, item.channel.currency)}</p>
+              <p><b>PSP cost:</b> {rate(item.channel.pspCostRate)}</p>
+              <p><b>Rolling reserve:</b> {rate(item.channel.rollingReserveRate)} / {item.channel.rollingReserveDays ?? 0} days</p>
+            </div>
+          </article>
         ))}
-      </div>
+      </section>
     </DashboardShell>
   );
 }

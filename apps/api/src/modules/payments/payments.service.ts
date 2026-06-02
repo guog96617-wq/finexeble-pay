@@ -4,6 +4,16 @@ import { nanoid } from "nanoid";
 import { safeCompare, signPayload } from "../../common/signature";
 import { PrismaService } from "../../prisma/prisma.service";
 
+type FeeBreakdown = {
+  merchantFeeAmount: Prisma.Decimal;
+  agentProfitAmount: Prisma.Decimal;
+  platformProfitAmount: Prisma.Decimal;
+  pspCostAmount: Prisma.Decimal;
+  merchantNetBeforeReserve: Prisma.Decimal;
+  rollingReserveAmount: Prisma.Decimal;
+  merchantAvailableAmount: Prisma.Decimal;
+};
+
 @Injectable()
 export class PaymentsService {
   private readonly nonceCache = new Map<string, number>();
@@ -16,28 +26,31 @@ export class PaymentsService {
     customerIp?: string,
   ) {
     const merchant = await this.verifyMerchantSignature(headers, JSON.stringify(body));
-    const channels = await this.prisma.channel.findMany({
-      where: { currency: body.currency, status: "ACTIVE" },
-      orderBy: [{ isPrimary: "desc" }, { priority: "asc" }],
-    });
+    const channels = await this.availableMerchantChannels(merchant.id, body.currency);
     if (channels.length === 0) {
       throw new BadRequestException("1006 Channel unavailable");
     }
 
     const amount = new Prisma.Decimal(body.amount);
-    const feeAmount = amount.mul(merchant.feeRate);
-    const netAmount = amount.sub(feeAmount);
+    const fee = await this.calculateFees(amount, channels[0], merchant.agentId);
     const orderNo = `P${new Date().getFullYear()}${nanoid(10).toUpperCase()}`;
     const order = await this.prisma.order.create({
       data: {
         merchantId: merchant.id,
-        channelId: channels[0].id,
+        channelId: channels[0].channelId,
         orderNo,
         merchantOrderNo: body.merchantOrderNo,
         amount,
         currency: body.currency,
-        feeAmount,
-        netAmount,
+        feeAmount: fee.merchantFeeAmount,
+        netAmount: fee.merchantAvailableAmount,
+        merchantFeeAmount: fee.merchantFeeAmount,
+        agentProfitAmount: fee.agentProfitAmount,
+        platformProfitAmount: fee.platformProfitAmount,
+        pspCostAmount: fee.pspCostAmount,
+        merchantNetBeforeReserve: fee.merchantNetBeforeReserve,
+        rollingReserveAmount: fee.rollingReserveAmount,
+        merchantAvailableAmount: fee.merchantAvailableAmount,
         status: "PROCESSING",
         paymentUrl: `/checkout/${orderNo}`,
         customerEmail: body.customerEmail,
@@ -94,61 +107,18 @@ export class PaymentsService {
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const current = await tx.order.findUnique({ where: { id: order.id } });
-      if (current?.status === "PAID") {
-        return current;
-      }
-
-      const paid = await tx.order.update({
-        where: { id: order.id },
-        data: { status: "PAID", paidAt: new Date() },
-      });
-      const wallet = await tx.wallet.upsert({
-        where: { merchantId: order.merchantId },
-        create: {
-          merchantId: order.merchantId,
-          balance: order.netAmount,
-          availableBalance: order.netAmount,
-          currency: order.currency,
-        },
-        update: {
-          balance: { increment: order.netAmount },
-          availableBalance: { increment: order.netAmount },
-        },
-      });
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          merchantId: order.merchantId,
-          type: "PAYMENT_IN",
-          amount: order.netAmount,
-          balanceAfter: wallet.availableBalance,
-          referenceType: "ORDER",
-          referenceId: order.id,
-          description: `Payment success ${order.orderNo}`,
-        },
-      });
-      await tx.webhookLog.create({
-        data: {
-          merchantId: order.merchantId,
-          orderId: order.id,
-          url: "mock://merchant-webhook",
-          requestPayload: {
-            event: "payment.success",
-            orderNo: order.orderNo,
-            merchantOrderNo: order.merchantOrderNo,
-            amount: order.amount.toString(),
-            currency: order.currency,
-            status: "PAID",
-          },
-          responseStatus: 200,
-          responseBody: "queued",
-          status: "SUCCESS",
-        },
-      });
-      return paid;
+    if (!order.channelId) {
+      throw new BadRequestException("1006 Channel unavailable");
+    }
+    const merchantChannel = await this.prisma.merchantChannel.findUnique({
+      where: { merchantId_channelId: { merchantId: order.merchantId, channelId: order.channelId } },
+      include: { channel: true },
     });
+    if (!merchantChannel) {
+      throw new BadRequestException("1006 Channel unavailable");
+    }
+    const fee = await this.calculateFees(order.amount, merchantChannel, order.merchant.agentId);
+    return this.settlePaidOrder(order.id, order.channelId, fee, { providerReference: body.providerReference ?? "psp_notify" });
   }
 
   async getCheckout(orderNo: string) {
@@ -250,26 +220,27 @@ export class PaymentsService {
       },
     });
 
-    const fee = this.calculateFees(order.amount, selected);
-    await this.settlePaidOrder(order.id, selected.channelId, fee.feeAmount, fee.netAmount, {
+    const fee = await this.calculateFees(order.amount, selected, order.merchant.agentId);
+    await this.settlePaidOrder(order.id, selected.channelId, fee, {
       providerReference: "sandbox_checkout",
-      pspFee: fee.pspFee.toFixed(2),
-      agentProfit: fee.agentProfit.toFixed(2),
-      platformProfit: fee.platformProfit.toFixed(2),
+      pspCost: fee.pspCostAmount.toFixed(2),
+      agentProfit: fee.agentProfitAmount.toFixed(2),
+      platformProfit: fee.platformProfitAmount.toFixed(2),
+      rollingReserve: fee.rollingReserveAmount.toFixed(2),
     });
     return this.getCheckout(orderNo);
   }
 
-  private async routePayment(orderId: string, channels: { id: string; name: string }[]) {
+  private async routePayment(orderId: string, channels: { channelId: string; channel: { name: string } }[]) {
     for (const [index, channel] of channels.entries()) {
       const simulatedFailure = index === 0 && channels.length > 1;
       await this.prisma.paymentAttempt.create({
         data: {
           orderId,
-          channelId: channel.id,
+          channelId: channel.channelId,
           attemptNo: index + 1,
           status: simulatedFailure ? "FAILED" : "SUCCESS",
-          requestPayload: { orderId, channel: channel.name },
+          requestPayload: { orderId, channel: channel.channel.name },
           responsePayload: simulatedFailure ? undefined : { paymentUrl: `https://checkout.payhub.local/${orderId}` },
           errorMessage: simulatedFailure ? "Primary channel simulated failure" : undefined,
         },
@@ -277,14 +248,14 @@ export class PaymentsService {
       if (!simulatedFailure) {
         return {
           success: true,
-          channelId: channel.id,
+          channelId: channel.channelId,
           paymentUrl: `https://checkout.payhub.local/${orderId}`,
         };
       }
     }
     return {
       success: false,
-      channelId: channels[0].id,
+      channelId: channels[0].channelId,
       errorMessage: "All channels failed",
     };
   }
@@ -297,42 +268,16 @@ export class PaymentsService {
         channel: {
           currency,
           status: "ACTIVE",
-          supplier: { status: "ACTIVE" },
           paymentMethod: paymentMethod && paymentMethod !== "SANDBOX_PAY" ? (paymentMethod as any) : undefined,
         },
       },
-      include: { channel: { include: { supplier: true } } },
-      orderBy: [{ isPrimary: "desc" }, { isBackup: "desc" }, { createdAt: "asc" }],
+      include: { channel: true },
+      orderBy: [{ isPrimary: "desc" }, { isBackup: "desc" }, { updatedAt: "desc" }],
     });
-    if (merchantChannels.length > 0) {
-      return merchantChannels;
-    }
-    const channels = await this.prisma.channel.findMany({
-      where: { currency, status: "ACTIVE", supplier: { status: "ACTIVE" }, paymentMethod: paymentMethod && paymentMethod !== "SANDBOX_PAY" ? (paymentMethod as any) : undefined },
-      include: { supplier: true },
-      orderBy: [{ isPrimary: "desc" }, { priority: "asc" }],
-    });
-    return channels.map((channel) => ({
-      id: `global_${channel.id}`,
-      merchantId,
-      channelId: channel.id,
-      isEnabled: true,
-      isPrimary: channel.isPrimary,
-      isBackup: channel.isBackup,
-      merchantFeeRate: channel.feeRate,
-      merchantFixedFee: new Prisma.Decimal("0"),
-      pspCostRate: channel.feeRate,
-      pspFixedFee: new Prisma.Decimal("0"),
-      agentCommissionRate: new Prisma.Decimal("0"),
-      minFee: new Prisma.Decimal("0"),
-      maxFee: null,
-      createdAt: channel.createdAt,
-      updatedAt: channel.updatedAt,
-      channel,
-    }));
+    return merchantChannels;
   }
 
-  private calculateFees(amount: Prisma.Decimal, config: { merchantFeeRate: Prisma.Decimal; merchantFixedFee: Prisma.Decimal; pspCostRate: Prisma.Decimal; pspFixedFee: Prisma.Decimal; minFee: Prisma.Decimal; maxFee: Prisma.Decimal | null }) {
+  private async calculateFees(amount: Prisma.Decimal, config: { merchantId: string; channelId: string; merchantFeeRate: Prisma.Decimal; merchantFixedFee: Prisma.Decimal; minFee: Prisma.Decimal; maxFee: Prisma.Decimal | null; channel: { pspCostRate: Prisma.Decimal; pspFixedFee: Prisma.Decimal; rollingReserveRate: Prisma.Decimal; rollingReserveDays: number } }, agentId: string | null) {
     let merchantFee = amount.mul(config.merchantFeeRate).plus(config.merchantFixedFee);
     if (merchantFee.lt(config.minFee)) {
       merchantFee = config.minFee;
@@ -340,14 +285,22 @@ export class PaymentsService {
     if (config.maxFee && merchantFee.gt(config.maxFee)) {
       merchantFee = config.maxFee;
     }
-    const pspFee = amount.mul(config.pspCostRate).plus(config.pspFixedFee);
-    const platformMinFee = amount.mul(config.pspCostRate);
+    const agentChannel = agentId
+      ? await this.prisma.agentChannel.findUnique({ where: { agentId_channelId: { agentId, channelId: config.channelId } } })
+      : null;
+    const agentBaseFee = amount.mul(agentChannel?.agentFeeRate ?? config.channel.pspCostRate).plus(agentChannel?.agentFixedFee ?? new Prisma.Decimal("0"));
+    const pspCost = amount.mul(config.channel.pspCostRate).plus(config.channel.pspFixedFee);
+    const merchantNetBeforeReserve = amount.sub(merchantFee);
+    const rollingReserveAmount = merchantNetBeforeReserve.mul(config.channel.rollingReserveRate);
+    const merchantAvailableAmount = merchantNetBeforeReserve.sub(rollingReserveAmount);
     return {
-      feeAmount: merchantFee,
-      netAmount: amount.sub(merchantFee),
-      pspFee,
-      agentProfit: merchantFee.sub(platformMinFee),
-      platformProfit: platformMinFee.sub(pspFee),
+      merchantFeeAmount: merchantFee,
+      agentProfitAmount: merchantFee.sub(agentBaseFee),
+      platformProfitAmount: agentBaseFee.sub(pspCost),
+      pspCostAmount: pspCost,
+      merchantNetBeforeReserve,
+      rollingReserveAmount,
+      merchantAvailableAmount,
     };
   }
 
@@ -356,7 +309,7 @@ export class PaymentsService {
     return (last?.attemptNo ?? 0) + 1;
   }
 
-  private async settlePaidOrder(orderId: string, channelId: string, feeAmount: Prisma.Decimal, netAmount: Prisma.Decimal, meta: Record<string, string>) {
+  private async settlePaidOrder(orderId: string, channelId: string, fee: FeeBreakdown, meta: Record<string, string>) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: { merchant: true } });
     if (!order) {
       throw new BadRequestException("1007 Order not found");
@@ -368,25 +321,86 @@ export class PaymentsService {
       }
       const paid = await tx.order.update({
         where: { id: orderId },
-        data: { status: "PAID", paidAt: new Date(), channelId, feeAmount, netAmount, failedReason: null },
+        data: {
+          status: "PAID",
+          paidAt: new Date(),
+          channelId,
+          feeAmount: fee.merchantFeeAmount,
+          netAmount: fee.merchantAvailableAmount,
+          merchantFeeAmount: fee.merchantFeeAmount,
+          agentProfitAmount: fee.agentProfitAmount,
+          platformProfitAmount: fee.platformProfitAmount,
+          pspCostAmount: fee.pspCostAmount,
+          merchantNetBeforeReserve: fee.merchantNetBeforeReserve,
+          rollingReserveAmount: fee.rollingReserveAmount,
+          merchantAvailableAmount: fee.merchantAvailableAmount,
+          failedReason: null,
+        },
       });
       const wallet = await tx.wallet.upsert({
         where: { merchantId: order.merchantId },
-        create: { merchantId: order.merchantId, balance: netAmount, availableBalance: netAmount, currency: order.currency },
-        update: { balance: { increment: netAmount }, availableBalance: { increment: netAmount } },
+        create: {
+          merchantId: order.merchantId,
+          balance: fee.merchantNetBeforeReserve,
+          availableBalance: fee.merchantAvailableAmount,
+          rollingReserveBalance: fee.rollingReserveAmount,
+          currency: order.currency,
+        },
+        update: {
+          balance: { increment: fee.merchantNetBeforeReserve },
+          availableBalance: { increment: fee.merchantAvailableAmount },
+          rollingReserveBalance: { increment: fee.rollingReserveAmount },
+        },
       });
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
           merchantId: order.merchantId,
           type: "PAYMENT_IN",
-          amount: netAmount,
+          amount: order.amount,
           balanceAfter: wallet.availableBalance,
           referenceType: "ORDER",
           referenceId: order.id,
-          description: `Checkout payment success ${order.orderNo}; fee ${feeAmount.toFixed(2)}`,
+          description: `Checkout payment success ${order.orderNo}`,
         },
       });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          merchantId: order.merchantId,
+          type: "MERCHANT_FEE_OUT",
+          amount: fee.merchantFeeAmount,
+          balanceAfter: wallet.availableBalance,
+          referenceType: "ORDER",
+          referenceId: order.id,
+          description: `Merchant fee ${fee.merchantFeeAmount.toFixed(2)}`,
+        },
+      });
+      if (fee.rollingReserveAmount.gt(0)) {
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            merchantId: order.merchantId,
+            type: "ROLLING_RESERVE_HOLD",
+            amount: fee.rollingReserveAmount,
+            balanceAfter: wallet.availableBalance,
+            referenceType: "ORDER",
+            referenceId: order.id,
+            description: `Rolling reserve hold ${fee.rollingReserveAmount.toFixed(2)}`,
+          },
+        });
+        const channel = await tx.channel.findUnique({ where: { id: channelId } });
+        await tx.rollingReserveRecord.create({
+          data: {
+            merchantId: order.merchantId,
+            orderId: order.id,
+            channelId,
+            amount: fee.rollingReserveAmount,
+            holdDays: channel?.rollingReserveDays ?? 0,
+            releaseAt: channel?.rollingReserveDays ? new Date(Date.now() + channel.rollingReserveDays * 24 * 60 * 60 * 1000) : null,
+          },
+        });
+      }
       await tx.webhookLog.create({
         data: {
           merchantId: order.merchantId,

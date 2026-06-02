@@ -30,7 +30,28 @@ export class AgentService {
 
   async merchants() {
     const agent = await this.demoAgent();
-    return this.prisma.merchant.findMany({ where: { agentId: agent.id }, include: { wallet: true } });
+    return this.prisma.merchant.findMany({ where: { agentId: agent.id }, include: { wallet: true, merchantChannels: { include: { channel: true } } } });
+  }
+
+  async merchant(id: string) {
+    const agent = await this.demoAgent();
+    const merchant = await this.prisma.merchant.findFirst({
+      where: { id, agentId: agent.id },
+      include: {
+        wallet: true,
+        orders: true,
+        merchantChannels: { include: { channel: true }, orderBy: [{ isPrimary: "desc" }, { isBackup: "desc" }, { createdAt: "asc" }] },
+      },
+    });
+    if (!merchant) {
+      throw new BadRequestException("AGENT_MERCHANT_FORBIDDEN");
+    }
+    const agentChannels = await this.prisma.agentChannel.findMany({
+      where: { agentId: agent.id, isEnabled: true, channel: { status: "ACTIVE" } },
+      include: { channel: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return { agent, merchant, agentChannels };
   }
 
   async orders() {
@@ -48,19 +69,17 @@ export class AgentService {
     return orders.map((order) => ({
       orderNo: order.orderNo,
       amount: order.amount,
-      commissionRate: agent.commissionRate,
-      commissionAmount: Number(order.amount) * Number(agent.commissionRate),
+      channelCost: order.merchantNetBeforeReserve,
+      commissionAmount: order.agentProfitAmount,
       createdAt: order.createdAt,
     }));
   }
 
   async paymentMethods() {
     const agent = await this.demoAgent();
-    return this.prisma.merchant.findMany({
+    return this.prisma.agentChannel.findMany({
       where: { agentId: agent.id },
-      include: {
-        merchantChannels: { include: { channel: { include: { supplier: true } } }, orderBy: { createdAt: "desc" } },
-      },
+      include: { channel: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -70,7 +89,7 @@ export class AgentService {
     const [rule, merchants, channels] = await Promise.all([
       this.prisma.agentFeeRule.findUnique({ where: { agentId: agent.id } }),
       this.prisma.merchant.findMany({ where: { agentId: agent.id }, include: { merchantChannels: { include: { channel: true } } } }),
-      this.prisma.channel.findMany({ include: { supplier: true }, orderBy: { priority: "asc" } }),
+      this.prisma.agentChannel.findMany({ where: { agentId: agent.id, isEnabled: true }, include: { channel: true }, orderBy: { createdAt: "desc" } }),
     ]);
     return { agent, rule, merchants, channels };
   }
@@ -81,7 +100,11 @@ export class AgentService {
     if (!merchant) {
       throw new BadRequestException("AGENT_MERCHANT_FORBIDDEN");
     }
-    await this.assertChannelAllowed(agent.id, channelId);
+    const agentChannel = await this.assertChannelAllowed(agent.id, channelId);
+    const merchantFeeRate = new Prisma.Decimal(String(body.merchantFeeRate ?? agentChannel.agentFeeRate));
+    if (merchantFeeRate.lt(agentChannel.agentFeeRate)) {
+      throw new BadRequestException("MERCHANT_FEE_TOO_LOW");
+    }
     return this.prisma.$transaction(async (tx) => {
       const result = await tx.merchantChannel.upsert({
         where: { merchantId_channelId: { merchantId, channelId } },
@@ -93,15 +116,15 @@ export class AgentService {
         } as any,
         include: { merchant: true, channel: { include: { supplier: true } } },
       });
-      await tx.auditLog.create({ data: { action: "agent.merchant_channel.upsert", module: "psp", afterData: this.safeJson(result) } });
+      await tx.auditLog.create({ data: { action: "agent.merchant_channel.upsert", module: "channels", afterData: this.safeJson(result) } });
       return result;
     });
   }
 
   async setMerchantFee(merchantId: string, channelId: string, body: Record<string, unknown>) {
     const agent = await this.demoAgent();
-    const rule = await this.prisma.agentFeeRule.findUnique({ where: { agentId: agent.id } });
-    const minMerchantFeeRate = new Prisma.Decimal(rule?.minMerchantFeeRate ?? "0");
+    const agentChannel = await this.assertChannelAllowed(agent.id, channelId);
+    const minMerchantFeeRate = new Prisma.Decimal(agentChannel.agentFeeRate);
     const nextRate = new Prisma.Decimal(String(body.merchantFeeRate ?? "0"));
     if (nextRate.lt(minMerchantFeeRate)) {
       throw new BadRequestException("MERCHANT_FEE_TOO_LOW");
@@ -139,11 +162,11 @@ export class AgentService {
   }
 
   private async assertChannelAllowed(agentId: string, channelId: string) {
-    const rule = await this.prisma.agentFeeRule.findUnique({ where: { agentId } });
-    const allowed = (rule?.allowedChannelIds as string[] | undefined) ?? [];
-    if (allowed.length > 0 && !allowed.includes(channelId)) {
+    const agentChannel = await this.prisma.agentChannel.findUnique({ where: { agentId_channelId: { agentId, channelId } } });
+    if (!agentChannel || !agentChannel.isEnabled) {
       throw new BadRequestException("AGENT_CHANNEL_FORBIDDEN");
     }
+    return agentChannel;
   }
 
   private merchantChannelData(body: Record<string, unknown>): Prisma.MerchantChannelUncheckedUpdateInput {
@@ -153,9 +176,6 @@ export class AgentService {
       isBackup: body.isBackup !== undefined ? Boolean(body.isBackup) : false,
       merchantFeeRate: body.merchantFeeRate !== undefined ? new Prisma.Decimal(String(body.merchantFeeRate)) : new Prisma.Decimal("0.029"),
       merchantFixedFee: body.merchantFixedFee !== undefined ? new Prisma.Decimal(String(body.merchantFixedFee)) : new Prisma.Decimal("0"),
-      pspCostRate: body.pspCostRate !== undefined ? new Prisma.Decimal(String(body.pspCostRate)) : new Prisma.Decimal("0.018"),
-      pspFixedFee: body.pspFixedFee !== undefined ? new Prisma.Decimal(String(body.pspFixedFee)) : new Prisma.Decimal("0"),
-      agentCommissionRate: body.agentCommissionRate !== undefined ? new Prisma.Decimal(String(body.agentCommissionRate)) : new Prisma.Decimal("0"),
       minFee: body.minFee !== undefined ? new Prisma.Decimal(String(body.minFee)) : new Prisma.Decimal("0"),
       maxFee: body.maxFee !== undefined && body.maxFee !== "" ? new Prisma.Decimal(String(body.maxFee)) : null,
     };

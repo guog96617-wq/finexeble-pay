@@ -11,32 +11,32 @@ const defaultNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
-  { section: "仪表台", items: [["Dashboard", "/admin"]] },
-  { section: "支付运营", items: [["风险告警", "/admin/risk-alerts"], ["订单管理", "/admin/orders"], ["PSP 管理", "/admin/psp"], ["通道管理", "/admin/channels"], ["Checkout 订单", "/admin/checkout-orders"], ["Webhook 日志", "/admin/webhooks"]] },
-  { section: "商户体系", items: [["商户管理", "/admin/merchants"], ["Merchant 360", "/admin/merchants"]] },
-  { section: "代理体系", items: [["代理管理", "/admin/agents"], ["代理费率规则", "/admin/agent-fee-rules"]] },
-  { section: "资金与结算", items: [["钱包流水", "/admin/wallet"], ["提现审核", "/admin/withdraws"], ["提现规则", "/admin/withdraw-rules"]] },
-  { section: "费率与利润", items: [["商户费率", "/admin/merchants"], ["商户 PSP 配置", "/admin/merchant-psp-status"], ["PSP 成本", "/admin/channels"], ["平台利润", "/admin"]] },
-  { section: "开发者中心", items: [["插件管理", "/admin/plugins"], ["API 日志", "/admin/api-logs"], ["SDK / Docs 管理", "/admin/developer-center"]] },
-  { section: "系统与安全", items: [["用户管理", "/admin/users"], ["审计日志", "/admin/audit-logs"], ["系统设置", "/admin/system-settings"]] },
+  { section: "Dashboard", items: [["Dashboard", "/admin"]] },
+  { section: "Payment operations", items: [["Risk alerts", "/admin/risk-alerts"], ["Orders", "/admin/orders"], ["Channel library", "/admin/channels"], ["Checkout orders", "/admin/checkout-orders"], ["Webhook logs", "/admin/webhooks"]] },
+  { section: "Merchants", items: [["Merchant list", "/admin/merchants"], ["Merchant supervision", "/admin/merchant-psp-status"]] },
+  { section: "Agents", items: [["Agent list", "/admin/agents"], ["Agent fee rules", "/admin/agent-fee-rules"]] },
+  { section: "Funds", items: [["Wallet ledger", "/admin/wallet"], ["Withdraw review", "/admin/withdraws"], ["Withdraw rules", "/admin/withdraw-rules"]] },
+  { section: "Profit", items: [["PSP cost", "/admin/channels"], ["Platform profit", "/admin/orders"], ["Agent profit", "/admin/agents"]] },
+  { section: "Developers", items: [["Plugins", "/admin/plugins"], ["API logs", "/admin/api-logs"], ["SDK / Docs", "/admin/developer-center"]] },
+  { section: "System", items: [["Users", "/admin/users"], ["Audit logs", "/admin/audit-logs"], ["Settings", "/admin/system-settings"]] },
 ];
 
 const agentNav: NavItem[] = [
-  { section: "仪表台", items: [["Dashboard", "/agent"]] },
-  { section: "商户运营", items: [["我的商户", "/agent/merchants"], ["商户 PSP", "/agent/payment-methods"], ["商户费率", "/agent/merchant-fees"], ["商户提现规则", "/agent/withdraw-rules"]] },
-  { section: "订单与交易", items: [["订单管理", "/agent/orders"], ["Checkout 订单", "/agent/checkout-orders"]] },
-  { section: "资金与收益", items: [["我的佣金", "/agent/commissions"], ["钱包", "/agent/wallet"], ["提现管理", "/agent/withdraws"]] },
-  { section: "开发者", items: [["API 文档", "/docs/api"]] },
-  { section: "账户与安全", items: [["个人设置", "/agent/settings"]] },
+  { section: "Dashboard", items: [["Dashboard", "/agent"]] },
+  { section: "Merchant operations", items: [["My merchants", "/agent/merchants"], ["My available channels", "/agent/payment-methods"], ["Merchant fees", "/agent/merchant-fees"], ["Merchant withdraw rules", "/agent/withdraw-rules"]] },
+  { section: "Orders", items: [["Orders", "/agent/orders"], ["Checkout orders", "/agent/checkout-orders"]] },
+  { section: "Funds", items: [["My commission", "/agent/commissions"], ["Wallet", "/agent/wallet"], ["Withdraws", "/agent/withdraws"]] },
+  { section: "Developers", items: [["API docs", "/docs/api"]] },
+  { section: "Account", items: [["Settings", "/agent/settings"]] },
 ];
 
 const merchantNav: NavItem[] = [
-  { section: "仪表台", items: [["Dashboard", "/merchant"]] },
-  { section: "支付与订单", items: [["创建订单", "/merchant/create-order"], ["订单管理", "/merchant/orders"], ["Checkout 订单", "/merchant/checkout-orders"]] },
-  { section: "资金中心", items: [["钱包", "/merchant/wallet"], ["提现", "/merchant/withdraws"], ["提现记录", "/merchant/withdraw-records"]] },
-  { section: "支付方式", items: [["我的支付方式", "/merchant/payment-methods"], ["PSP / 通道状态", "/merchant/psp-status"]] },
-  { section: "开发者", items: [["API Keys", "/merchant/developers"], ["Webhook", "/merchant/webhooks"], ["Webhook 日志", "/merchant/webhook-logs"], ["API 文档", "/docs/api"], ["SDK 下载", "/merchant/sdk"], ["插件中心", "/merchant/plugins"]] },
-  { section: "账户", items: [["账户设置", "/merchant/settings"]] },
+  { section: "Dashboard", items: [["Dashboard", "/merchant"]] },
+  { section: "Payments", items: [["Orders", "/merchant/orders"], ["Checkout orders", "/merchant/checkout-orders"]] },
+  { section: "Funds", items: [["Wallet", "/merchant/wallet"], ["Withdraw", "/merchant/withdraws"], ["Withdraw records", "/merchant/withdraw-records"]] },
+  { section: "Channels", items: [["My payment channels", "/merchant/payment-methods"]] },
+  { section: "Developers", items: [["API Keys", "/merchant/developers"], ["Webhook", "/merchant/webhooks"], ["Webhook logs", "/merchant/webhook-logs"], ["API docs", "/docs/api"], ["SDK", "/merchant/sdk"], ["Plugins", "/merchant/plugins"]] },
+  { section: "Account", items: [["Settings", "/merchant/settings"]] },
 ];
 
 function navForRole(requiredRole: UserRole) {

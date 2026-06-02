@@ -10,7 +10,7 @@ export const adminNavigation = [
   ["Dashboard", "#dashboard"],
   ["Merchants", "#merchants"],
   ["Agents", "#agents"],
-  ["PSP", "#psp"],
+  ["Channels", "#channels"],
   ["Orders", "#orders"],
   ["Finance", "#withdraws"],
   ["Routing", "#routing"],

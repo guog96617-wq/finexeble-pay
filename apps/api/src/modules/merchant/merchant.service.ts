@@ -129,7 +129,7 @@ export class MerchantService {
   async paymentMethods() {
     const merchant = await this.demoMerchant();
     const [merchantChannels, withdrawRule] = await Promise.all([
-      this.prisma.merchantChannel.findMany({ where: { merchantId: merchant.id, isEnabled: true }, include: { channel: { include: { supplier: true } } }, orderBy: [{ isPrimary: "desc" }, { isBackup: "desc" }] }),
+      this.prisma.merchantChannel.findMany({ where: { merchantId: merchant.id, isEnabled: true }, include: { channel: true }, orderBy: [{ isPrimary: "desc" }, { isBackup: "desc" }] }),
       this.resolveWithdrawRule(merchant.id, merchant.agentId, "USD"),
     ]);
     return { merchant, channels: merchantChannels, withdrawRule };

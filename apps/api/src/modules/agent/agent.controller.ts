@@ -17,6 +17,11 @@ export class AgentController {
     return this.agent.merchants();
   }
 
+  @Get("merchants/:id")
+  merchant(@Param("id") id: string) {
+    return this.agent.merchant(id);
+  }
+
   @Get("orders")
   orders() {
     return this.agent.orders();
