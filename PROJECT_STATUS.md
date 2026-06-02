@@ -31,13 +31,16 @@ Status: Completed
 Status: Completed with CLI auth limitation
 
 - Railway CLI is installed (`railway 4.66.0`).
-- Current Railway CLI auth is invalid: `Unauthorized. Please run railway login again.`
-- Live Web service settings cannot be inspected until Railway auth is refreshed.
+- Railway CLI auth has been restored.
 - Based on Railway monorepo behavior, Web service should use:
   - Root Directory: repo root (`/`)
   - Config File: `/apps/web/railway.toml`
   - Dockerfile Path: `apps/web/Dockerfile`
 - `apps/web/railway.toml` was updated so its Dockerfile path matches repo-root build context.
+- Railway Web service was still failing because the root `railway.toml` applied API config globally:
+  - Build logs showed `apps/api/Dockerfile`.
+  - Healthcheck path was `/docs`.
+- Root `railway.toml` was removed so API/Web services use their Railway service-specific settings instead of a single API-only root config.
 
 ### Step 5 - Continue Web deployment
 Status: Completed as far as local/GitHub access allows
@@ -63,3 +66,4 @@ Status: Ready
 - Fix: Web Dockerfile now builds from monorepo root; `apps/web/railway.toml` now points to `apps/web/Dockerfile`; local Docker build and runtime checks pass; fixes were pushed to GitHub.
 - Current online Web address: `https://web-production-70ac7.up.railway.app/`.
 - Recommended next step: refresh Railway CLI login or open Railway dashboard to confirm Web service uses Root Directory `/`, Config File `/apps/web/railway.toml`, and that the latest deployment from commit `f738ec3` completed.
+- After Railway auth was restored, Web failure logs confirmed the root `railway.toml` was still applying API Dockerfile settings to the Web service. Root `railway.toml` was deleted to remove that global override.

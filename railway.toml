@@ -1,9 +1,0 @@
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "apps/api/Dockerfile"
-
-[deploy]
-startCommand = "node scripts/railway-start.js"
-healthcheckPath = "/docs"
-healthcheckTimeout = 100
-restartPolicyType = "ON_FAILURE"
