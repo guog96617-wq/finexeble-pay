@@ -58,6 +58,10 @@ Status: Completed as far as local/GitHub access allows
 - Public Web URL check returned HTTP 200: `https://web-production-70ac7.up.railway.app/`.
 - Public API docs check returned HTTP 200: `https://api-production-777b.up.railway.app/docs`.
 - Railway dashboard/CLI deployment status could not be confirmed because the local Railway CLI token is expired.
+- Railway CLI auth was restored and Web deployment was completed through local snapshot upload.
+- Successful Web deployment ID: `ea46bb0b-f380-4623-8775-5e680f953b3b`.
+- Web container starts Next.js on `0.0.0.0:8080`.
+- Public Web URL returned HTTP 200 after the port fix.
 
 ### Final Output
 Status: Ready
@@ -67,3 +71,4 @@ Status: Ready
 - Current online Web address: `https://web-production-70ac7.up.railway.app/`.
 - Recommended next step: refresh Railway CLI login or open Railway dashboard to confirm Web service uses Root Directory `/`, Config File `/apps/web/railway.toml`, and that the latest deployment from commit `f738ec3` completed.
 - After Railway auth was restored, Web failure logs confirmed the root `railway.toml` was still applying API Dockerfile settings to the Web service. Root `railway.toml` was deleted to remove that global override.
+- Final live deployment succeeded after updating Web production start script to listen on Railway's service domain port (`8080`).
