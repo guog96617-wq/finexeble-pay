@@ -59,7 +59,7 @@ Status: Completed as far as local/GitHub access allows
 - Public API docs check returned HTTP 200: `https://api-production-777b.up.railway.app/docs`.
 - Railway dashboard/CLI deployment status could not be confirmed because the local Railway CLI token is expired.
 - Railway CLI auth was restored and Web deployment was completed through local snapshot upload.
-- Successful Web deployment ID: `ea46bb0b-f380-4623-8775-5e680f953b3b`.
+- Successful Web deployment ID: `88fb55c2-c4f5-4c6a-94c3-4067d35e98c3`.
 - Web container starts Next.js on `0.0.0.0:8080`.
 - Public Web URL returned HTTP 200 after the port fix.
 
