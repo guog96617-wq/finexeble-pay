@@ -28,7 +28,7 @@ Status: Completed
 - Build produced a Next.js 15 production bundle successfully.
 
 ### Step 4 - Check Railway Web Service configuration
-Status: In progress
+Status: Completed with CLI auth limitation
 
 - Railway CLI is installed (`railway 4.66.0`).
 - Current Railway CLI auth is invalid: `Unauthorized. Please run railway login again.`
@@ -40,7 +40,7 @@ Status: In progress
 - `apps/web/railway.toml` was updated so its Dockerfile path matches repo-root build context.
 
 ### Step 5 - Continue Web deployment
-Status: In progress
+Status: Completed as far as local/GitHub access allows
 
 - Local Web image build is complete.
 - Next step: run the built image locally and verify the HTTP response.
@@ -49,7 +49,17 @@ Status: In progress
   - `GET http://localhost:3010/` returned HTTP 200.
   - Container logs show Next.js ready on `0.0.0.0:3000`.
 - Re-ran Docker build after config update; build still passes.
-- Next step: commit and push changes to trigger Railway GitHub deployment.
+- Committed deployment fix: `f738ec3 fix railway web monorepo docker config`.
+- Pushed `master` to GitHub successfully.
+- `origin/master` now matches local `HEAD`.
+- Public Web URL check returned HTTP 200: `https://web-production-70ac7.up.railway.app/`.
+- Public API docs check returned HTTP 200: `https://api-production-777b.up.railway.app/docs`.
+- Railway dashboard/CLI deployment status could not be confirmed because the local Railway CLI token is expired.
 
 ### Final Output
-Status: Pending
+Status: Ready
+
+- Root cause: Railway Web deployment was using an app-local/incorrect Docker build context or API-oriented Railway config, while the restored Web Dockerfile requires the monorepo root as Docker build context.
+- Fix: Web Dockerfile now builds from monorepo root; `apps/web/railway.toml` now points to `apps/web/Dockerfile`; local Docker build and runtime checks pass; fixes were pushed to GitHub.
+- Current online Web address: `https://web-production-70ac7.up.railway.app/`.
+- Recommended next step: refresh Railway CLI login or open Railway dashboard to confirm Web service uses Root Directory `/`, Config File `/apps/web/railway.toml`, and that the latest deployment from commit `f738ec3` completed.
