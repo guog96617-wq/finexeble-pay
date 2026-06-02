@@ -57,14 +57,44 @@ export class CoreController {
     return this.core.listSuppliers();
   }
 
+  @Get("psp")
+  psp() {
+    return this.core.listSuppliers();
+  }
+
+  @Get("psp/:id")
+  pspDetail(@Param("id") id: string) {
+    return this.core.getSupplier(id);
+  }
+
+  @Get("suppliers/:id")
+  supplierDetail(@Param("id") id: string) {
+    return this.core.getSupplier(id);
+  }
+
   @Post("suppliers")
   createSupplier(@Body() body: Record<string, unknown>) {
+    return this.core.createSupplier(body);
+  }
+
+  @Post("psp")
+  createPsp(@Body() body: Record<string, unknown>) {
     return this.core.createSupplier(body);
   }
 
   @Patch("suppliers/:id")
   updateSupplier(@Param("id") id: string, @Body() body: Record<string, unknown>) {
     return this.core.updateSupplier(id, body);
+  }
+
+  @Patch("psp/:id")
+  updatePsp(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    return this.core.updateSupplier(id, body);
+  }
+
+  @Patch("psp/:id/status")
+  setPspStatus(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    return this.core.setSupplierStatus(id, body.status === "DISABLED" ? "DISABLED" : "ACTIVE");
   }
 
   @Patch("suppliers/:id/enable")
@@ -80,6 +110,11 @@ export class CoreController {
   @Get("channels")
   channels() {
     return this.core.listChannels();
+  }
+
+  @Get("channels/:id")
+  channel(@Param("id") id: string) {
+    return this.core.getChannel(id);
   }
 
   @Post("channels")
@@ -100,6 +135,11 @@ export class CoreController {
   @Patch("channels/:id/disable")
   disableChannel(@Param("id") id: string) {
     return this.core.updateChannel(id, { status: "DISABLED" });
+  }
+
+  @Patch("channels/:id/status")
+  setChannelStatus(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    return this.core.updateChannel(id, { status: body.status === "DISABLED" ? "DISABLED" : "ACTIVE" });
   }
 
   @Patch("channels/:id/primary")

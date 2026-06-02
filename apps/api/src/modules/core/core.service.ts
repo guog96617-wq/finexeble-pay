@@ -75,7 +75,18 @@ export class CoreService {
     return this.prisma.supplier.findMany({ include: { channels: true }, orderBy: { createdAt: "desc" } });
   }
 
+  async getSupplier(id: string) {
+    const supplier = await this.prisma.supplier.findUnique({ where: { id }, include: { channels: true } });
+    if (!supplier) {
+      throw new BadRequestException("PSP not found");
+    }
+    return supplier;
+  }
+
   createSupplier(body: Record<string, unknown>) {
+    if (!body.name) {
+      throw new BadRequestException("PSP name is required");
+    }
     return this.prisma.$transaction(async (tx) => {
       const supplier = await tx.supplier.create({
         data: {
@@ -95,6 +106,9 @@ export class CoreService {
   updateSupplier(id: string, body: Record<string, unknown>) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.supplier.findUnique({ where: { id } });
+      if (!before) {
+        throw new BadRequestException("PSP not found");
+      }
       const supplier = await tx.supplier.update({
         where: { id },
         data: {
@@ -214,7 +228,21 @@ export class CoreService {
     return this.prisma.channel.findMany({ include: { supplier: true }, orderBy: [{ priority: "asc" }] });
   }
 
+  async getChannel(id: string) {
+    const channel = await this.prisma.channel.findUnique({ where: { id }, include: { supplier: true } });
+    if (!channel) {
+      throw new BadRequestException("Channel not found");
+    }
+    return channel;
+  }
+
   createChannel(body: Record<string, unknown>) {
+    if (!body.supplierId) {
+      throw new BadRequestException("Please select a PSP");
+    }
+    if (!body.name) {
+      throw new BadRequestException("Channel name is required");
+    }
     return this.prisma.$transaction(async (tx) => {
       const channel = await tx.channel.create({ data: this.channelData(body) as any });
       await tx.auditLog.create({ data: { action: "admin.channel.create", module: "psp", afterData: channel } });
@@ -225,6 +253,9 @@ export class CoreService {
   updateChannel(id: string, body: Record<string, unknown>) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.channel.findUnique({ where: { id } });
+      if (!before) {
+        throw new BadRequestException("Channel not found");
+      }
       const channel = await tx.channel.update({ where: { id }, data: this.channelData(body, true) });
       await tx.auditLog.create({ data: { action: "admin.channel.update", module: "psp", beforeData: before ?? undefined, afterData: channel } });
       return channel;
