@@ -277,7 +277,7 @@ export class PaymentsService {
     return merchantChannels;
   }
 
-  private async calculateFees(amount: Prisma.Decimal, config: { merchantId: string; channelId: string; merchantFeeRate: Prisma.Decimal; merchantFixedFee: Prisma.Decimal; minFee: Prisma.Decimal; maxFee: Prisma.Decimal | null; channel: { pspCostRate: Prisma.Decimal; pspFixedFee: Prisma.Decimal; rollingReserveRate: Prisma.Decimal; rollingReserveDays: number } }, agentId: string | null) {
+  private async calculateFees(amount: Prisma.Decimal, config: { merchantId: string; channelId: string; merchantFeeRate: Prisma.Decimal; merchantFixedFee: Prisma.Decimal; minFee: Prisma.Decimal; maxFee: Prisma.Decimal | null; channel: { pspCostRate: Prisma.Decimal; pspFixedFee: Prisma.Decimal; rollingReserveRate: Prisma.Decimal; rollingReserveDays: number; settlementType?: string; settlementDays?: number } }, agentId: string | null) {
     let merchantFee = amount.mul(config.merchantFeeRate).plus(config.merchantFixedFee);
     if (merchantFee.lt(config.minFee)) {
       merchantFee = config.minFee;
@@ -319,6 +319,11 @@ export class PaymentsService {
       if (current?.status === "PAID") {
         return current;
       }
+      const channel = await tx.channel.findUnique({ where: { id: channelId } });
+      const settlementDays = channel?.settlementDays ?? 0;
+      const settlementType = settlementDays === 0 ? "T+0" : `T+${settlementDays}`;
+      const releaseAt = settlementDays > 0 ? new Date(Date.now() + settlementDays * 24 * 60 * 60 * 1000) : null;
+      const shouldFreezeSettlement = settlementDays > 0;
       const paid = await tx.order.update({
         where: { id: orderId },
         data: {
@@ -334,39 +339,60 @@ export class PaymentsService {
           merchantNetBeforeReserve: fee.merchantNetBeforeReserve,
           rollingReserveAmount: fee.rollingReserveAmount,
           merchantAvailableAmount: fee.merchantAvailableAmount,
+          settlementType,
+          settlementDays,
+          settlementReleaseAt: releaseAt,
           failedReason: null,
         },
       });
       const wallet = await tx.wallet.upsert({
         where: { merchantId: order.merchantId },
         create: {
+          ownerType: "MERCHANT",
           merchantId: order.merchantId,
           balance: fee.merchantNetBeforeReserve,
-          availableBalance: fee.merchantAvailableAmount,
+          availableBalance: shouldFreezeSettlement ? new Prisma.Decimal("0") : fee.merchantAvailableAmount,
+          frozenBalance: shouldFreezeSettlement ? fee.merchantAvailableAmount : new Prisma.Decimal("0"),
           rollingReserveBalance: fee.rollingReserveAmount,
           currency: order.currency,
         },
         update: {
           balance: { increment: fee.merchantNetBeforeReserve },
-          availableBalance: { increment: fee.merchantAvailableAmount },
+          availableBalance: shouldFreezeSettlement ? undefined : { increment: fee.merchantAvailableAmount },
+          frozenBalance: shouldFreezeSettlement ? { increment: fee.merchantAvailableAmount } : undefined,
           rollingReserveBalance: { increment: fee.rollingReserveAmount },
         },
       });
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
+          ownerType: "MERCHANT",
           merchantId: order.merchantId,
-          type: "PAYMENT_IN",
-          amount: order.amount,
+          type: shouldFreezeSettlement ? "SETTLEMENT_FREEZE" : "PAYMENT_IN",
+          amount: fee.merchantAvailableAmount,
           balanceAfter: wallet.availableBalance,
           referenceType: "ORDER",
           referenceId: order.id,
-          description: `Checkout payment success ${order.orderNo}`,
+          description: shouldFreezeSettlement ? `${settlementType} merchant settlement frozen ${order.orderNo}` : `Checkout payment success ${order.orderNo}`,
         },
       });
+      if (shouldFreezeSettlement && releaseAt) {
+        await tx.settlementRecord.create({
+          data: {
+            ownerType: "MERCHANT",
+            ownerId: order.merchantId,
+            merchantId: order.merchantId,
+            orderId: order.id,
+            amount: fee.merchantAvailableAmount,
+            settlementDays,
+            releaseAt,
+          },
+        });
+      }
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
+          ownerType: "MERCHANT",
           merchantId: order.merchantId,
           type: "MERCHANT_FEE_OUT",
           amount: fee.merchantFeeAmount,
@@ -380,6 +406,7 @@ export class PaymentsService {
         await tx.walletTransaction.create({
           data: {
             walletId: wallet.id,
+            ownerType: "MERCHANT",
             merchantId: order.merchantId,
             type: "ROLLING_RESERVE_HOLD",
             amount: fee.rollingReserveAmount,
@@ -389,7 +416,6 @@ export class PaymentsService {
             description: `Rolling reserve hold ${fee.rollingReserveAmount.toFixed(2)}`,
           },
         });
-        const channel = await tx.channel.findUnique({ where: { id: channelId } });
         await tx.rollingReserveRecord.create({
           data: {
             merchantId: order.merchantId,
@@ -400,6 +426,50 @@ export class PaymentsService {
             releaseAt: channel?.rollingReserveDays ? new Date(Date.now() + channel.rollingReserveDays * 24 * 60 * 60 * 1000) : null,
           },
         });
+      }
+      if (order.merchant.agentId && fee.agentProfitAmount.gt(0)) {
+        const agentWallet = await tx.wallet.upsert({
+          where: { agentId: order.merchant.agentId },
+          create: {
+            ownerType: "AGENT",
+            agentId: order.merchant.agentId,
+            balance: fee.agentProfitAmount,
+            availableBalance: shouldFreezeSettlement ? new Prisma.Decimal("0") : fee.agentProfitAmount,
+            frozenBalance: shouldFreezeSettlement ? fee.agentProfitAmount : new Prisma.Decimal("0"),
+            currency: order.currency,
+          },
+          update: {
+            balance: { increment: fee.agentProfitAmount },
+            availableBalance: shouldFreezeSettlement ? undefined : { increment: fee.agentProfitAmount },
+            frozenBalance: shouldFreezeSettlement ? { increment: fee.agentProfitAmount } : undefined,
+          },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            walletId: agentWallet.id,
+            ownerType: "AGENT",
+            agentId: order.merchant.agentId,
+            type: shouldFreezeSettlement ? "SETTLEMENT_FREEZE" : "AGENT_COMMISSION_IN",
+            amount: fee.agentProfitAmount,
+            balanceAfter: agentWallet.availableBalance,
+            referenceType: "ORDER",
+            referenceId: order.id,
+            description: shouldFreezeSettlement ? `${settlementType} agent commission frozen ${order.orderNo}` : `Agent commission settled ${order.orderNo}`,
+          },
+        });
+        if (shouldFreezeSettlement && releaseAt) {
+          await tx.settlementRecord.create({
+            data: {
+              ownerType: "AGENT",
+              ownerId: order.merchant.agentId,
+              agentId: order.merchant.agentId,
+              orderId: order.id,
+              amount: fee.agentProfitAmount,
+              settlementDays,
+              releaseAt,
+            },
+          });
+        }
       }
       await tx.webhookLog.create({
         data: {

@@ -375,7 +375,7 @@ export class CoreService {
   }
 
   listWithdraws() {
-    return this.prisma.withdraw.findMany({ include: { merchant: true }, orderBy: { createdAt: "desc" } });
+    return this.prisma.withdraw.findMany({ include: { merchant: true, agent: true, withdrawAddress: true }, orderBy: { createdAt: "desc" } });
   }
 
   async reviewWithdraw(id: string, status: WithdrawStatus) {
@@ -385,7 +385,11 @@ export class CoreService {
         throw new Error("Withdraw not found");
       }
 
-      const wallet = await tx.wallet.findUnique({ where: { merchantId: withdraw.merchantId } });
+      const wallet = withdraw.ownerType === "AGENT" && withdraw.agentId
+        ? await tx.wallet.findUnique({ where: { agentId: withdraw.agentId } })
+        : withdraw.merchantId
+          ? await tx.wallet.findUnique({ where: { merchantId: withdraw.merchantId } })
+          : null;
       if (!wallet) {
         throw new Error("Wallet not found");
       }
@@ -402,15 +406,17 @@ export class CoreService {
         const updatedWallet = await tx.wallet.update({
           where: { id: wallet.id },
           data: {
+            balance: { increment: withdraw.amount },
             availableBalance: { increment: withdraw.amount },
-            frozenBalance: { decrement: withdraw.amount },
           },
         });
         await tx.walletTransaction.create({
           data: {
             walletId: wallet.id,
+            ownerType: withdraw.ownerType,
             merchantId: withdraw.merchantId,
-            type: "WITHDRAW_FAILED",
+            agentId: withdraw.agentId,
+            type: "WITHDRAW_REJECT_REFUND",
             amount: withdraw.amount,
             balanceAfter: updatedWallet.availableBalance,
             referenceType: "WITHDRAW",
@@ -421,20 +427,15 @@ export class CoreService {
       }
 
       if (status === "PAID") {
-        const updatedWallet = await tx.wallet.update({
-          where: { id: wallet.id },
-          data: {
-            balance: { decrement: withdraw.amount },
-            frozenBalance: { decrement: withdraw.amount },
-          },
-        });
         await tx.walletTransaction.create({
           data: {
             walletId: wallet.id,
+            ownerType: withdraw.ownerType,
             merchantId: withdraw.merchantId,
-            type: "WITHDRAW_SUCCESS",
+            agentId: withdraw.agentId,
+            type: "WITHDRAW_PAID",
             amount: withdraw.amount,
-            balanceAfter: updatedWallet.availableBalance,
+            balanceAfter: wallet.availableBalance,
             referenceType: "WITHDRAW",
             referenceId: withdraw.id,
             description: `Withdraw paid ${withdraw.withdrawNo}`,
@@ -442,11 +443,103 @@ export class CoreService {
         });
       }
 
-      return tx.withdraw.update({
+      if (status === "APPROVED") {
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            ownerType: withdraw.ownerType,
+            merchantId: withdraw.merchantId,
+            agentId: withdraw.agentId,
+            type: "WITHDRAW_APPROVED",
+            amount: withdraw.amount,
+            balanceAfter: wallet.availableBalance,
+            referenceType: "WITHDRAW",
+            referenceId: withdraw.id,
+            description: `Withdraw approved ${withdraw.withdrawNo}`,
+          },
+        });
+      }
+
+      const updated = await tx.withdraw.update({
         where: { id },
-        data: { status, reviewedAt: new Date(), reviewedBy: "system-admin" },
+        data: { status, reviewedAt: new Date(), reviewedBy: "system-admin", processedAt: new Date(), processedBy: "system-admin" },
       });
+      await tx.auditLog.create({
+        data: {
+          action: `admin.withdraw.${status.toLowerCase()}`,
+          module: "withdraws",
+          afterData: {
+            id: withdraw.id,
+            withdrawNo: withdraw.withdrawNo,
+            ownerType: withdraw.ownerType,
+            ownerId: withdraw.ownerId,
+            status,
+          },
+        },
+      });
+      return updated;
     });
+  }
+
+  listSettlementRecords() {
+    return this.prisma.settlementRecord.findMany({
+      include: { merchant: true, agent: true, order: true },
+      orderBy: [{ status: "asc" }, { releaseAt: "asc" }],
+    });
+  }
+
+  async releaseDueSettlements(now = new Date()) {
+    const due = await this.prisma.settlementRecord.findMany({
+      where: { status: "FROZEN", releaseAt: { lte: now } },
+      orderBy: { releaseAt: "asc" },
+    });
+    const released = [];
+    for (const record of due) {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.settlementRecord.findUnique({ where: { id: record.id } });
+        if (!current || current.status !== "FROZEN" || current.releaseAt > now) {
+          return null;
+        }
+        const wallet = current.ownerType === "AGENT" && current.agentId
+          ? await tx.wallet.findUnique({ where: { agentId: current.agentId } })
+          : current.merchantId
+            ? await tx.wallet.findUnique({ where: { merchantId: current.merchantId } })
+            : null;
+        if (!wallet) {
+          throw new BadRequestException("SETTLEMENT_WALLET_NOT_FOUND");
+        }
+        const updatedWallet = await tx.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            frozenBalance: { decrement: current.amount },
+            availableBalance: { increment: current.amount },
+          },
+        });
+        const updatedRecord = await tx.settlementRecord.update({
+          where: { id: current.id },
+          data: { status: "RELEASED", releasedAt: now },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            ownerType: current.ownerType,
+            merchantId: current.merchantId,
+            agentId: current.agentId,
+            type: "SETTLEMENT_RELEASE",
+            amount: current.amount,
+            balanceAfter: updatedWallet.availableBalance,
+            referenceType: "SETTLEMENT",
+            referenceId: current.id,
+            description: `T+${current.settlementDays} settlement released`,
+          },
+        });
+        return updatedRecord;
+      });
+      if (result) {
+        released.push(result);
+      }
+    }
+    return { scanned: due.length, released };
   }
 
   listPlugins() {
@@ -496,6 +589,8 @@ export class CoreService {
       pspFixedFee: body.pspFixedFee !== undefined ? new Prisma.Decimal(String(body.pspFixedFee)) : partial ? undefined : new Prisma.Decimal("0"),
       rollingReserveRate: body.rollingReserveRate !== undefined ? new Prisma.Decimal(String(body.rollingReserveRate)) : partial ? undefined : new Prisma.Decimal("0"),
       rollingReserveDays: body.rollingReserveDays !== undefined ? Number(body.rollingReserveDays) : partial ? undefined : 0,
+      settlementDays: body.settlementDays !== undefined ? this.settlementDays(body.settlementDays) : partial ? undefined : 0,
+      settlementType: body.settlementDays !== undefined ? `T+${this.settlementDays(body.settlementDays)}` : body.settlementType ? this.settlementType(body.settlementType) : partial ? undefined : "T+0",
       description: body.description ? String(body.description) : undefined,
       priority: body.priority !== undefined ? Number(body.priority) : partial ? undefined : 100,
       isPrimary: body.isPrimary !== undefined ? Boolean(body.isPrimary) : partial ? undefined : false,
@@ -545,5 +640,21 @@ export class CoreService {
       requireManualReview: body.requireManualReview !== undefined ? Boolean(body.requireManualReview) : true,
       status: body.status ? (String(body.status) as any) : "ACTIVE",
     };
+  }
+
+  private settlementDays(value: unknown) {
+    const days = Number(value);
+    if ([0, 1, 7].includes(days)) {
+      return days;
+    }
+    throw new BadRequestException("SETTLEMENT_DAYS_INVALID");
+  }
+
+  private settlementType(value: unknown) {
+    const type = String(value);
+    if (type === "T+0" || type === "T+1" || type === "T+7") {
+      return type;
+    }
+    throw new BadRequestException("SETTLEMENT_TYPE_INVALID");
   }
 }

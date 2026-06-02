@@ -67,18 +67,72 @@ export class MerchantService {
     return this.prisma.walletTransaction.findMany({ where: { merchantId: merchant.id }, orderBy: { createdAt: "desc" } });
   }
 
+  async withdrawAddresses() {
+    const merchant = await this.demoMerchant();
+    return this.prisma.withdrawAddress.findMany({
+      where: { ownerType: "MERCHANT", ownerId: merchant.id },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async createWithdrawAddress(body: Record<string, unknown>) {
+    const merchant = await this.demoMerchant();
+    const asset = this.withdrawAsset(body.asset);
+    const network = this.withdrawNetwork(body.network);
+    const label = String(body.label ?? "").trim();
+    const address = String(body.address ?? "").trim();
+    if (!label || !address) {
+      throw new BadRequestException("WITHDRAW_ADDRESS_REQUIRED");
+    }
+    const count = await this.prisma.withdrawAddress.count({ where: { ownerType: "MERCHANT", ownerId: merchant.id } });
+    if (count >= 5) {
+      throw new BadRequestException("WITHDRAW_ADDRESS_LIMIT_REACHED");
+    }
+    return this.prisma.withdrawAddress.create({
+      data: {
+        ownerType: "MERCHANT",
+        ownerId: merchant.id,
+        merchantId: merchant.id,
+        label,
+        asset,
+        network,
+        address,
+      },
+    });
+  }
+
+  async settlementRecords() {
+    const merchant = await this.demoMerchant();
+    return this.prisma.settlementRecord.findMany({
+      where: { ownerType: "MERCHANT", ownerId: merchant.id },
+      include: { order: true },
+      orderBy: [{ status: "asc" }, { releaseAt: "asc" }],
+    });
+  }
+
   async createWithdraw(body: Record<string, unknown>) {
     const merchant = await this.demoMerchant();
     const amount = new Prisma.Decimal(String(body.amount));
-    const rule = await this.resolveWithdrawRule(merchant.id, merchant.agentId, String(body.currency ?? "USD"));
-    if (amount.lt(rule.minAmount)) {
+    const minAmount = new Prisma.Decimal("100");
+    const maxAmount = new Prisma.Decimal("50000");
+    if (amount.lt(minAmount)) {
       throw new BadRequestException("WITHDRAW_AMOUNT_TOO_LOW");
     }
-    if (amount.gt(rule.maxAmount)) {
+    if (amount.gt(maxAmount)) {
       throw new BadRequestException("WITHDRAW_AMOUNT_TOO_HIGH");
     }
-    const feeAmount = amount.mul(rule.withdrawFeeRate).plus(rule.withdrawFixedFee);
-    const actualPayout = amount.sub(feeAmount);
+    const withdrawAddressId = String(body.withdrawAddressId ?? "");
+    if (!withdrawAddressId) {
+      throw new BadRequestException("WITHDRAW_ADDRESS_REQUIRED");
+    }
+    const address = await this.prisma.withdrawAddress.findFirst({
+      where: { id: withdrawAddressId, ownerType: "MERCHANT", ownerId: merchant.id, status: "ACTIVE" },
+    });
+    if (!address) {
+      throw new BadRequestException("WITHDRAW_ADDRESS_INVALID");
+    }
+    const feeAmount = new Prisma.Decimal("0");
+    const actualPayout = amount;
     return this.prisma.$transaction(async (tx) => {
       const wallet = await tx.wallet.findUnique({ where: { merchantId: merchant.id } });
       if (!wallet || wallet.availableBalance.lt(amount)) {
@@ -88,33 +142,41 @@ export class MerchantService {
       const updatedWallet = await tx.wallet.update({
         where: { id: wallet.id },
         data: {
+          balance: { decrement: amount },
           availableBalance: { decrement: amount },
-          frozenBalance: { increment: amount },
         },
       });
       const withdraw = await tx.withdraw.create({
         data: {
+          ownerType: "MERCHANT",
+          ownerId: merchant.id,
           merchantId: merchant.id,
+          withdrawAddressId: address.id,
           withdrawNo: `W${new Date().getFullYear()}${nanoid(10).toUpperCase()}`,
           amount,
           feeAmount,
           actualPayout,
           currency: String(body.currency ?? "USD"),
-          bankName: String(body.bankName),
-          bankAccount: String(body.bankAccount),
-          accountName: String(body.accountName),
+          asset: address.asset,
+          network: address.network,
+          addressSnapshot: address.address,
+          addressLabelSnapshot: address.label,
+          bankName: body.bankName ? String(body.bankName) : undefined,
+          bankAccount: body.bankAccount ? String(body.bankAccount) : undefined,
+          accountName: body.accountName ? String(body.accountName) : undefined,
         },
       });
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
+          ownerType: "MERCHANT",
           merchantId: merchant.id,
-          type: "WITHDRAW_FREEZE",
+          type: "WITHDRAW_REQUEST",
           amount,
           balanceAfter: updatedWallet.availableBalance,
           referenceType: "WITHDRAW",
           referenceId: withdraw.id,
-          description: `Withdraw requested ${withdraw.withdrawNo}; fee ${feeAmount.toFixed(2)}; payout ${actualPayout.toFixed(2)}`,
+          description: `Crypto withdraw requested ${withdraw.withdrawNo}; ${address.asset} ${address.network} ${this.maskAddress(address.address)}`,
         },
       });
       return withdraw;
@@ -123,7 +185,11 @@ export class MerchantService {
 
   async withdraws() {
     const merchant = await this.demoMerchant();
-    return this.prisma.withdraw.findMany({ where: { merchantId: merchant.id }, orderBy: { createdAt: "desc" } });
+    return this.prisma.withdraw.findMany({
+      where: { ownerType: "MERCHANT", ownerId: merchant.id },
+      include: { withdrawAddress: true },
+      orderBy: { createdAt: "desc" },
+    });
   }
 
   async paymentMethods() {
@@ -220,5 +286,23 @@ export class MerchantService {
       withdrawFeeRate: new Prisma.Decimal("0.01"),
       withdrawFixedFee: new Prisma.Decimal("0"),
     };
+  }
+
+  private withdrawAsset(value: unknown) {
+    if (value === "USDT" || value === "USDC") {
+      return value;
+    }
+    throw new BadRequestException("WITHDRAW_ASSET_INVALID");
+  }
+
+  private withdrawNetwork(value: unknown) {
+    if (value === "ERC20" || value === "TRC20" || value === "BEP20") {
+      return value;
+    }
+    throw new BadRequestException("WITHDRAW_NETWORK_INVALID");
+  }
+
+  private maskAddress(address: string) {
+    return `****${address.slice(-4)}`;
   }
 }

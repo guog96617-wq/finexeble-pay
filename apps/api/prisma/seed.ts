@@ -61,6 +61,20 @@ async function main() {
     },
   });
 
+  await prisma.wallet.upsert({
+    where: { agentId: agent.id },
+    update: {},
+    create: {
+      ownerType: "AGENT",
+      agentId: agent.id,
+      balance: new Prisma.Decimal("1500.00"),
+      availableBalance: new Prisma.Decimal("1200.00"),
+      frozenBalance: new Prisma.Decimal("300.00"),
+      rollingReserveBalance: new Prisma.Decimal("0.00"),
+      currency: "USD",
+    },
+  });
+
   await prisma.user.upsert({
     where: { email: "admin@payhub.local" },
     update: {
@@ -139,6 +153,8 @@ async function main() {
               pspFixedFee: new Prisma.Decimal("0.00"),
               rollingReserveRate: new Prisma.Decimal("0.0500"),
               rollingReserveDays: 7,
+              settlementType: "T+7",
+              settlementDays: 7,
               supplierName: "MockPay PSP",
               supplierContactName: "PSP Support",
               supplierApiBaseUrl: "https://mockpay.local/api",
@@ -155,6 +171,8 @@ async function main() {
               pspFixedFee: new Prisma.Decimal("0.00"),
               rollingReserveRate: new Prisma.Decimal("0.0500"),
               rollingReserveDays: 7,
+              settlementType: "T+7",
+              settlementDays: 7,
               supplierName: "MockPay PSP",
               supplierContactName: "PSP Support",
               supplierApiBaseUrl: "https://mockpay.local/api",
@@ -182,6 +200,8 @@ async function main() {
         pspFixedFee: new Prisma.Decimal("0.00"),
         rollingReserveRate: new Prisma.Decimal("0.0500"),
         rollingReserveDays: 7,
+        settlementType: "T+7",
+        settlementDays: 7,
         supplierName: "MockPay PSP",
         supplierContactName: "PSP Support",
         supplierApiBaseUrl: "https://mockpay.local/api",
@@ -204,6 +224,8 @@ async function main() {
         pspFixedFee: new Prisma.Decimal("0.00"),
         rollingReserveRate: new Prisma.Decimal("0.0500"),
         rollingReserveDays: 7,
+        settlementType: "T+7",
+        settlementDays: 7,
         supplierName: "MockPay PSP",
         supplierContactName: "PSP Support",
         supplierApiBaseUrl: "https://mockpay.local/api",
@@ -227,6 +249,8 @@ async function main() {
         pspFixedFee: new Prisma.Decimal("0.00"),
         rollingReserveRate: new Prisma.Decimal("0.0500"),
         rollingReserveDays: 7,
+        settlementType: "T+7",
+        settlementDays: 7,
         supplierName: "MockPay PSP",
         supplierContactName: "PSP Support",
         supplierApiBaseUrl: "https://mockpay.local/api",
@@ -236,6 +260,10 @@ async function main() {
   }
 
   const seededChannels = await prisma.channel.findMany({ where: { supplierId: supplier.id, currency: "USD" }, orderBy: [{ isPrimary: "desc" }, { priority: "asc" }] });
+  await prisma.channel.updateMany({
+    where: { id: { in: seededChannels.map((channel) => channel.id) } },
+    data: { settlementType: "T+7", settlementDays: 7 },
+  });
   const primaryForMerchant = seededChannels.find((channel) => channel.name === "MockPay Primary Card") ?? seededChannels[0];
   const backupForMerchant = seededChannels.find((channel) => channel.name === "MockPay Backup Card") ?? sandboxChannel;
 
@@ -323,20 +351,20 @@ async function main() {
   await prisma.withdrawRule.upsert({
     where: { merchantId_currency: { merchantId: merchant.id, currency: "USD" } },
     update: {
-      minAmount: new Prisma.Decimal("1.00"),
-      maxAmount: new Prisma.Decimal("5000.00"),
-      withdrawFeeRate: new Prisma.Decimal("0.0150"),
-      withdrawFixedFee: new Prisma.Decimal("1.00"),
+      minAmount: new Prisma.Decimal("100.00"),
+      maxAmount: new Prisma.Decimal("50000.00"),
+      withdrawFeeRate: new Prisma.Decimal("0.0000"),
+      withdrawFixedFee: new Prisma.Decimal("0.00"),
       settlementDays: 1,
       requireManualReview: true,
     },
     create: {
       merchantId: merchant.id,
       currency: "USD",
-      minAmount: new Prisma.Decimal("1.00"),
-      maxAmount: new Prisma.Decimal("5000.00"),
-      withdrawFeeRate: new Prisma.Decimal("0.0150"),
-      withdrawFixedFee: new Prisma.Decimal("1.00"),
+      minAmount: new Prisma.Decimal("100.00"),
+      maxAmount: new Prisma.Decimal("50000.00"),
+      withdrawFeeRate: new Prisma.Decimal("0.0000"),
+      withdrawFixedFee: new Prisma.Decimal("0.00"),
       settlementDays: 1,
       requireManualReview: true,
     },
@@ -425,17 +453,55 @@ async function main() {
     });
   }
 
+  let merchantWithdrawAddress = await prisma.withdrawAddress.findFirst({
+    where: { ownerType: "MERCHANT", ownerId: merchant.id, address: "TQxDemoMerchantUSDTTRC20A9f3" },
+  });
+  if (!merchantWithdrawAddress) {
+    merchantWithdrawAddress = await prisma.withdrawAddress.create({
+      data: {
+        ownerType: "MERCHANT",
+        ownerId: merchant.id,
+        merchantId: merchant.id,
+        label: "Demo USDT TRC20 wallet",
+        asset: "USDT",
+        network: "TRC20",
+        address: "TQxDemoMerchantUSDTTRC20A9f3",
+      },
+    });
+  }
+
+  const agentWithdrawAddress = await prisma.withdrawAddress.findFirst({
+    where: { ownerType: "AGENT", ownerId: agent.id, address: "TQxDemoAgentUSDTTRC20B8e2" },
+  });
+  if (!agentWithdrawAddress) {
+    await prisma.withdrawAddress.create({
+      data: {
+        ownerType: "AGENT",
+        ownerId: agent.id,
+        agentId: agent.id,
+        label: "Agent USDT TRC20 wallet",
+        asset: "USDT",
+        network: "TRC20",
+        address: "TQxDemoAgentUSDTTRC20B8e2",
+      },
+    });
+  }
+
   await prisma.withdraw.upsert({
     where: { withdrawNo: "W202600001" },
     update: {},
     create: {
+      ownerType: "MERCHANT",
+      ownerId: merchant.id,
       merchantId: merchant.id,
+      withdrawAddressId: merchantWithdrawAddress.id,
       withdrawNo: "W202600001",
       amount: new Prisma.Decimal("500.00"),
       currency: "USD",
-      bankName: "Demo Bank",
-      bankAccount: "000123456789",
-      accountName: "Demo Global Shop Ltd",
+      asset: "USDT",
+      network: "TRC20",
+      addressSnapshot: merchantWithdrawAddress.address,
+      addressLabelSnapshot: merchantWithdrawAddress.label,
       status: "PENDING",
     },
   });

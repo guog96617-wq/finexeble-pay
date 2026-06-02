@@ -38,6 +38,8 @@ export type AdminChannel = {
   pspFixedFee?: string;
   rollingReserveRate?: string;
   rollingReserveDays?: number;
+  settlementType?: string;
+  settlementDays?: number;
   description?: string | null;
   priority: number;
   isPrimary: boolean;
@@ -129,6 +131,18 @@ function ChannelForm({ channel, onSubmit, loading }: { channel?: AdminChannel; o
         </Field>
         <Field label="Reserve days">
           <input name="rollingReserveDays" type="number" defaultValue={channel?.rollingReserveDays ?? 7} />
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Settlement type">
+          <select name="settlementDays" defaultValue={channel?.settlementDays ?? 0}>
+            <option value="0">T+0</option>
+            <option value="1">T+1</option>
+            <option value="7">T+7</option>
+          </select>
+        </Field>
+        <Field label="Settlement note">
+          <input value={`Funds settle as ${channel?.settlementType ?? `T+${channel?.settlementDays ?? 0}`}`} readOnly />
         </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -237,6 +251,7 @@ export function AdminChannelManager({ initialChannels }: { initialSuppliers?: Ad
               <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
                 <p><b>PSP cost:</b> {rate(channel.pspCostRate ?? channel.feeRate)} + {money(channel.pspFixedFee)}</p>
                 <p><b>Rolling reserve:</b> {rate(channel.rollingReserveRate)} / {channel.rollingReserveDays ?? 0} days</p>
+                <p><b>Settlement:</b> {channel.settlementType ?? `T+${channel.settlementDays ?? 0}`}</p>
                 <p><b>Today volume:</b> {money(String(todayVolume))}</p>
                 <p><b>Success rate:</b> {channel.orders?.length ? "100.00%" : "0.00%"}</p>
                 <p><b>Authorized agents:</b> {channel.agentChannels?.length ?? 0}</p>

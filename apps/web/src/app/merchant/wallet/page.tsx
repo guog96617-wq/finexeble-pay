@@ -1,6 +1,7 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
 import { OpsMetricCard, SectionHeader, SimpleBars } from "@/components/ProductOps";
+import { WalletCryptoPanel } from "@/components/WalletCryptoPanel";
 import { apiGet, money } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +15,17 @@ type Wallet = {
 };
 
 type Transaction = { id: string; type: string; amount: string; balanceAfter: string; description?: string | null; createdAt: string };
+type WithdrawAddress = { id: string; label: string; asset: "USDT" | "USDC"; network: "ERC20" | "TRC20" | "BEP20"; address: string; status: string; createdAt: string };
+type Withdraw = { id: string; withdrawNo: string; amount: string; currency: string; asset?: string | null; network?: string | null; addressSnapshot?: string | null; addressLabelSnapshot?: string | null; status: string; createdAt: string };
+type Settlement = { id: string; amount: string; status: string; settlementDays: number; releaseAt: string; releasedAt?: string | null; order?: { orderNo?: string | null } | null };
 
 export default async function MerchantWalletPage() {
-  const [wallet, transactions] = await Promise.all([
+  const [wallet, transactions, addresses, withdraws, settlements] = await Promise.all([
     apiGet<Wallet | null>("/api/merchant/wallet", null),
     apiGet<Transaction[]>("/api/merchant/wallet/transactions", []),
+    apiGet<WithdrawAddress[]>("/api/merchant/wallet/withdraw-addresses", []),
+    apiGet<Withdraw[]>("/api/merchant/withdraws", []),
+    apiGet<Settlement[]>("/api/merchant/wallet/settlements", []),
   ]);
 
   const currency = wallet?.currency ?? "USD";
@@ -39,19 +46,22 @@ export default async function MerchantWalletPage() {
       <SectionHeader
         eyebrow="Funds center"
         title="Wallet center"
-        text="Withdrawals can only use available balance. Rolling reserve is shown separately and is not withdrawable in V1.7."
+        text="提现地址、提现申请、提现记录和冻结资金明细都集中在钱包页。提现只能使用 available balance。"
         status="ACTIVE"
-        action={<a href="/merchant/withdraws" className="button">Go to withdraws</a>}
       />
 
       <section className="grid-fit">
         <OpsMetricCard label="Total balance" value={money(wallet?.balance, currency)} tone="brand" trend="Total" />
         <OpsMetricCard label="Available balance" value={money(wallet?.availableBalance, currency)} tone="success" trend="Withdrawable" />
-        <OpsMetricCard label="Frozen balance" value={money(wallet?.frozenBalance, currency)} tone="warn" trend="Withdraw review" />
+        <OpsMetricCard label="Frozen balance" value={money(wallet?.frozenBalance, currency)} tone="warn" trend="T+N" />
         <OpsMetricCard label="Rolling reserve" value={money(wallet?.rollingReserveBalance, currency)} tone="cyan" trend="Held" />
         <OpsMetricCard label="Payment in" value={money(paymentIn, currency)} tone="brand" trend="Ledger" />
         <OpsMetricCard label="Merchant fees" value={money(feeOut, currency)} tone="warn" trend="Fee out" />
         <OpsMetricCard label="Reserve holds" value={money(reserveHold, currency)} tone="cyan" trend="Reserve" />
+      </section>
+
+      <section className="mt-8">
+        <WalletCryptoPanel wallet={wallet} owner="merchant" addresses={addresses} withdraws={withdraws} settlements={settlements} />
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">

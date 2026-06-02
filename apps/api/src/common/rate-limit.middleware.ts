@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 
 const buckets = new Map<string, { count: number; resetAt: number }>();
 const windowMs = 60_000;
-const limit = 100;
+const limit = Number(process.env.RATE_LIMIT_PER_MINUTE ?? (process.env.NODE_ENV === "production" ? 100 : 1000));
 
 export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
   const key = req.ip ?? "unknown";

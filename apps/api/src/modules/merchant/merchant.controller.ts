@@ -32,6 +32,21 @@ export class MerchantController {
     return this.merchant.transactions();
   }
 
+  @Get("wallet/withdraw-addresses")
+  withdrawAddresses() {
+    return this.merchant.withdrawAddresses();
+  }
+
+  @Post("wallet/withdraw-addresses")
+  createWithdrawAddress(@Body() body: Record<string, unknown>) {
+    return this.merchant.createWithdrawAddress(body);
+  }
+
+  @Get("wallet/settlements")
+  settlementRecords() {
+    return this.merchant.settlementRecords();
+  }
+
   @Get("payment-methods")
   paymentMethods() {
     return this.merchant.paymentMethods();

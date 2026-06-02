@@ -1,6 +1,5 @@
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
-import { MerchantWithdrawForm } from "@/components/MerchantForms";
 import { OpsMetricCard, SectionHeader } from "@/components/ProductOps";
 import { StatusBadge } from "@/components/StatusBadge";
 import { apiGet, money } from "@/lib/api";
@@ -14,22 +13,13 @@ type Wallet = {
   currency: string;
 };
 
-type WithdrawRule = {
-  minAmount: string;
-  maxAmount: string;
-  withdrawFeeRate: string;
-  withdrawFixedFee: string;
-  settlementDays?: number;
-  requireManualReview?: boolean;
-  currency?: string;
-};
-
 type Withdraw = {
   withdrawNo: string;
   amount: string;
-  feeAmount: string;
-  actualPayout: string;
   currency: string;
+  asset?: string | null;
+  network?: string | null;
+  addressSnapshot?: string | null;
   status: string;
   createdAt?: string;
 };
@@ -40,13 +30,12 @@ function displayStatus(status: string) {
 }
 
 export default async function MerchantWithdrawsPage() {
-  const [wallet, rule, withdraws] = await Promise.all([
+  const [wallet, withdraws] = await Promise.all([
     apiGet<Wallet | null>("/api/merchant/wallet", null),
-    apiGet<WithdrawRule | null>("/api/merchant/withdraw-rules", null),
     apiGet<Withdraw[]>("/api/merchant/withdraws", []),
   ]);
 
-  const currency = wallet?.currency ?? rule?.currency ?? "USD";
+  const currency = wallet?.currency ?? "USD";
   const today = new Date().toDateString();
   const todayWithdrawAmount = withdraws
     .filter((item) => item.createdAt && new Date(item.createdAt).toDateString() === today)
@@ -56,13 +45,14 @@ export default async function MerchantWithdrawsPage() {
     .reduce((sum, item) => sum + Number(item.amount), 0);
   const paidToday = withdraws
     .filter((item) => item.status === "PAID" && item.createdAt && new Date(item.createdAt).toDateString() === today)
-    .reduce((sum, item) => sum + Number(item.actualPayout ?? 0), 0);
+    .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
 
   const rows = withdraws.map((item) => [
     item.withdrawNo,
     money(item.amount, item.currency),
-    money(item.feeAmount ?? 0, item.currency),
-    money(item.actualPayout ?? 0, item.currency),
+    item.asset ?? "-",
+    item.network ?? "-",
+    item.addressSnapshot ? `****${item.addressSnapshot.slice(-4)}` : "-",
     <StatusBadge key={item.withdrawNo} status={displayStatus(item.status)} />,
     item.createdAt ? new Date(item.createdAt).toLocaleString() : "-",
   ]);
@@ -71,9 +61,10 @@ export default async function MerchantWithdrawsPage() {
     <DashboardShell requiredRole="MERCHANT_ADMIN" title="Withdraw Center" role="Merchant Admin">
       <SectionHeader
         eyebrow="Funds Center"
-        title="提现中心"
-        text="管理提现申请、提现记录和到账状态。"
+        title="提现记录"
+        text="V1.8 提现申请入口只放在钱包页面。本页保留为提现记录查看。"
         status="ACTIVE"
+        action={<a href="/merchant/wallet" className="button">前往钱包页申请提现</a>}
       />
 
       <section className="grid-fit">
@@ -84,20 +75,13 @@ export default async function MerchantWithdrawsPage() {
         <OpsMetricCard label="今日到账金额" value={money(paidToday, currency)} tone="success" trend="Paid" />
       </section>
 
-      <section className="mt-8 grid gap-8 xl:grid-cols-[0.9fr_1.1fr]">
-        <MerchantWithdrawForm
-          rule={rule}
-          currency={currency}
-          availableBalance={wallet?.availableBalance ?? "0"}
+      <section className="mt-8">
+        <SectionHeader title="提现记录" text="状态包含 PENDING / APPROVED / REJECTED / PAID。" />
+        <DataTable
+          columns={["提现单号", "金额", "币种", "网络", "地址尾号", "状态", "创建时间"]}
+          rows={rows}
+          empty="暂无提现记录。"
         />
-        <div>
-          <SectionHeader title="提现记录" text="状态包含 PENDING / REVIEWING / REJECTED / PAID。" />
-          <DataTable
-            columns={["提现单号", "金额", "手续费", "实际到账", "状态", "创建时间"]}
-            rows={rows}
-            empty="暂无提现记录。"
-          />
-        </div>
       </section>
     </DashboardShell>
   );

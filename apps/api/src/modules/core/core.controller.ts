@@ -237,6 +237,16 @@ export class CoreController {
     return this.core.reviewWithdraw(id, "PAID");
   }
 
+  @Get("settlements")
+  settlements() {
+    return this.core.listSettlementRecords();
+  }
+
+  @Post("settlements/release-due")
+  releaseDueSettlements(@Body() body: { now?: string }) {
+    return this.core.releaseDueSettlements(body?.now ? new Date(body.now) : undefined);
+  }
+
   @Get("plugins")
   plugins() {
     return this.core.listPlugins();

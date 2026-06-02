@@ -32,6 +32,41 @@ export class AgentController {
     return this.agent.commissions();
   }
 
+  @Get("wallet")
+  wallet() {
+    return this.agent.wallet();
+  }
+
+  @Get("wallet/transactions")
+  transactions() {
+    return this.agent.transactions();
+  }
+
+  @Get("wallet/withdraw-addresses")
+  withdrawAddresses() {
+    return this.agent.withdrawAddresses();
+  }
+
+  @Post("wallet/withdraw-addresses")
+  createWithdrawAddress(@Body() body: Record<string, unknown>) {
+    return this.agent.createWithdrawAddress(body);
+  }
+
+  @Get("wallet/settlements")
+  settlementRecords() {
+    return this.agent.settlementRecords();
+  }
+
+  @Post("withdraws")
+  createWithdraw(@Body() body: Record<string, unknown>) {
+    return this.agent.createWithdraw(body);
+  }
+
+  @Get("withdraws")
+  withdraws() {
+    return this.agent.withdraws();
+  }
+
   @Get("payment-methods")
   paymentMethods() {
     return this.agent.paymentMethods();

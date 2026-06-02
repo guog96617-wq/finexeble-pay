@@ -55,14 +55,20 @@ enum RefundStatus {
 
 enum WalletTransactionType {
   PAYMENT_IN
+  AGENT_COMMISSION_IN
   REFUND_OUT
   FEE_OUT
   MERCHANT_FEE_OUT
   ROLLING_RESERVE_HOLD
+  SETTLEMENT_FREEZE
+  SETTLEMENT_RELEASE
+  WITHDRAW_REQUEST
   WITHDRAW_FREEZE
+  WITHDRAW_APPROVED
   WITHDRAW_SUCCESS
   WITHDRAW_PAID
   WITHDRAW_FAILED
+  WITHDRAW_REJECT_REFUND
   ADJUSTMENT
 }
 
@@ -77,6 +83,31 @@ enum WithdrawStatus {
   APPROVED
   REJECTED
   PAID
+}
+
+enum OwnerType {
+  MERCHANT
+  AGENT
+}
+
+enum WithdrawAsset {
+  USDT
+  USDC
+}
+
+enum WithdrawNetwork {
+  ERC20
+  TRC20
+  BEP20
+}
+
+enum WithdrawAddressStatus {
+  ACTIVE
+}
+
+enum SettlementRecordStatus {
+  FROZEN
+  RELEASED
 }
 
 enum PluginPlatform {
@@ -124,6 +155,11 @@ model Agent {
   feeRules  AgentFeeRule[]
   withdrawRules WithdrawRule[]
   agentChannels AgentChannel[]
+  wallet    Wallet?
+  walletTransactions WalletTransaction[]
+  withdraws Withdraw[]
+  withdrawAddresses WithdrawAddress[]
+  settlementRecords SettlementRecord[]
 
   @@map("agents")
 }
@@ -149,12 +185,14 @@ model Merchant {
   wallet             Wallet?
   walletTransactions WalletTransaction[]
   withdraws          Withdraw[]
+  withdrawAddresses  WithdrawAddress[]
   apiKeys            ApiKey[]
   webhooks           Webhook[]
   webhookLogs        WebhookLog[]
   merchantChannels   MerchantChannel[]
   withdrawRules      WithdrawRule[]
   rollingReserveRecords RollingReserveRecord[]
+  settlementRecords SettlementRecord[]
 
   @@map("merchants")
 }
@@ -191,6 +229,8 @@ model Channel {
   pspFixedFee   Decimal  @default(0) @map("psp_fixed_fee") @db.Decimal(18, 2)
   rollingReserveRate Decimal @default(0) @map("rolling_reserve_rate") @db.Decimal(8, 4)
   rollingReserveDays Int @default(0) @map("rolling_reserve_days")
+  settlementType String @default("T+0") @map("settlement_type")
+  settlementDays Int @default(0) @map("settlement_days")
   description   String?
   priority      Int      @default(100)
   isPrimary     Boolean  @default(false) @map("is_primary")
@@ -244,6 +284,9 @@ model Order {
   merchantNetBeforeReserve Decimal @default(0) @map("merchant_net_before_reserve") @db.Decimal(18, 2)
   rollingReserveAmount Decimal @default(0) @map("rolling_reserve_amount") @db.Decimal(18, 2)
   merchantAvailableAmount Decimal @default(0) @map("merchant_available_amount") @db.Decimal(18, 2)
+  settlementType  String   @default("T+0") @map("settlement_type")
+  settlementDays  Int      @default(0) @map("settlement_days")
+  settlementReleaseAt DateTime? @map("settlement_release_at")
   status          OrderStatus @default(PENDING)
   paymentUrl      String?  @map("payment_url")
   customerEmail   String?  @map("customer_email")
@@ -259,6 +302,7 @@ model Order {
   refunds  Refund[]
   webhookLogs WebhookLog[]
   rollingReserveRecords RollingReserveRecord[]
+  settlementRecords SettlementRecord[]
 
   @@map("orders")
 }
@@ -299,7 +343,9 @@ model Refund {
 
 model Wallet {
   id               String   @id @default(cuid())
-  merchantId       String   @unique @map("merchant_id")
+  ownerType        OwnerType @default(MERCHANT) @map("owner_type")
+  merchantId       String?  @unique @map("merchant_id")
+  agentId          String?  @unique @map("agent_id")
   balance          Decimal  @default(0) @db.Decimal(18, 2)
   availableBalance Decimal  @default(0) @map("available_balance") @db.Decimal(18, 2)
   frozenBalance    Decimal  @default(0) @map("frozen_balance") @db.Decimal(18, 2)
@@ -308,7 +354,8 @@ model Wallet {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  merchant     Merchant @relation(fields: [merchantId], references: [id])
+  merchant     Merchant? @relation(fields: [merchantId], references: [id])
+  agent        Agent?    @relation(fields: [agentId], references: [id])
   transactions WalletTransaction[]
 
   @@map("wallets")
@@ -317,7 +364,9 @@ model Wallet {
 model WalletTransaction {
   id            String   @id @default(cuid())
   walletId      String   @map("wallet_id")
-  merchantId    String   @map("merchant_id")
+  ownerType     OwnerType @default(MERCHANT) @map("owner_type")
+  merchantId    String?  @map("merchant_id")
+  agentId       String?  @map("agent_id")
   type          WalletTransactionType
   amount        Decimal  @db.Decimal(18, 2)
   balanceAfter  Decimal  @map("balance_after") @db.Decimal(18, 2)
@@ -327,31 +376,91 @@ model WalletTransaction {
   createdAt     DateTime @default(now()) @map("created_at")
 
   wallet   Wallet   @relation(fields: [walletId], references: [id])
-  merchant Merchant @relation(fields: [merchantId], references: [id])
+  merchant Merchant? @relation(fields: [merchantId], references: [id])
+  agent    Agent?    @relation(fields: [agentId], references: [id])
 
   @@map("wallet_transactions")
 }
 
 model Withdraw {
   id          String   @id @default(cuid())
-  merchantId  String   @map("merchant_id")
+  ownerType   OwnerType @default(MERCHANT) @map("owner_type")
+  ownerId     String   @map("owner_id")
+  merchantId  String?  @map("merchant_id")
+  agentId     String?  @map("agent_id")
+  withdrawAddressId String? @map("withdraw_address_id")
   withdrawNo  String   @unique @map("withdraw_no")
   amount      Decimal  @db.Decimal(18, 2)
   feeAmount   Decimal  @default(0) @map("fee_amount") @db.Decimal(18, 2)
   actualPayout Decimal @default(0) @map("actual_payout") @db.Decimal(18, 2)
   currency    String
-  bankName    String   @map("bank_name")
-  bankAccount String   @map("bank_account")
-  accountName String   @map("account_name")
+  asset       WithdrawAsset? @default(USDT)
+  network     WithdrawNetwork? @default(TRC20)
+  addressSnapshot String? @map("address_snapshot")
+  addressLabelSnapshot String? @map("address_label_snapshot")
+  bankName    String?  @map("bank_name")
+  bankAccount String?  @map("bank_account")
+  accountName String?  @map("account_name")
   status      WithdrawStatus @default(PENDING)
   reviewedBy  String?  @map("reviewed_by")
   reviewedAt  DateTime? @map("reviewed_at")
+  processedAt DateTime? @map("processed_at")
+  processedBy String? @map("processed_by")
+  rejectReason String? @map("reject_reason")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  merchant Merchant @relation(fields: [merchantId], references: [id])
+  merchant Merchant? @relation(fields: [merchantId], references: [id])
+  agent    Agent?    @relation(fields: [agentId], references: [id])
+  withdrawAddress WithdrawAddress? @relation(fields: [withdrawAddressId], references: [id])
 
   @@map("withdraws")
+}
+
+model WithdrawAddress {
+  id        String @id @default(cuid())
+  ownerType OwnerType @map("owner_type")
+  ownerId   String @map("owner_id")
+  merchantId String? @map("merchant_id")
+  agentId    String? @map("agent_id")
+  label     String
+  asset     WithdrawAsset
+  network   WithdrawNetwork
+  address   String
+  status    WithdrawAddressStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id])
+  agent    Agent?    @relation(fields: [agentId], references: [id])
+  withdraws Withdraw[]
+
+  @@index([ownerType, ownerId])
+  @@map("withdraw_addresses")
+}
+
+model SettlementRecord {
+  id        String @id @default(cuid())
+  ownerType OwnerType @map("owner_type")
+  ownerId   String @map("owner_id")
+  merchantId String? @map("merchant_id")
+  agentId    String? @map("agent_id")
+  orderId   String @map("order_id")
+  amount    Decimal @db.Decimal(18, 2)
+  status    SettlementRecordStatus @default(FROZEN)
+  settlementDays Int @map("settlement_days")
+  releaseAt DateTime @map("release_at")
+  releasedAt DateTime? @map("released_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id])
+  agent    Agent?    @relation(fields: [agentId], references: [id])
+  order    Order @relation(fields: [orderId], references: [id])
+
+  @@index([ownerType, ownerId])
+  @@index([status, releaseAt])
+  @@map("settlement_records")
 }
 
 model MerchantChannel {

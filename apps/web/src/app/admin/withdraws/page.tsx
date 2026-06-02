@@ -8,10 +8,17 @@ export const dynamic = "force-dynamic";
 type Withdraw = {
   id: string;
   withdrawNo: string;
+  ownerType?: "MERCHANT" | "AGENT";
   status: string;
   amount: string;
   currency: string;
+  asset?: string | null;
+  network?: string | null;
+  addressSnapshot?: string | null;
+  addressLabelSnapshot?: string | null;
+  createdAt?: string;
   merchant?: { name: string } | null;
+  agent?: { name: string } | null;
 };
 
 export default async function AdminWithdrawsPage() {

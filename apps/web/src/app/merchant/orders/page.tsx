@@ -18,6 +18,9 @@ type Order = {
   merchantFeeAmount?: string;
   merchantAvailableAmount?: string;
   rollingReserveAmount?: string;
+  settlementType?: string;
+  settlementDays?: number;
+  settlementReleaseAt?: string | null;
   createdAt?: string;
   attempts?: { attemptNo: number; status: string; channel?: { name: string } | null }[];
 };
@@ -32,6 +35,9 @@ export default async function MerchantOrdersPage() {
     money(order.merchantFeeAmount ?? 0, order.currency),
     money(order.merchantAvailableAmount ?? 0, order.currency),
     money(order.rollingReserveAmount ?? 0, order.currency),
+    order.settlementType ?? `T+${order.settlementDays ?? 0}`,
+    Number(order.settlementDays ?? 0) > 0 ? "YES" : "NO",
+    order.settlementReleaseAt ? new Date(order.settlementReleaseAt).toLocaleString() : "-",
     order.attempts?.map((attempt) => `${attempt.attemptNo}.${attempt.status}${attempt.channel?.name ? ` ${attempt.channel.name}` : ""}`).join(" / ") ?? "-",
     order.createdAt ? new Date(order.createdAt).toLocaleString() : "-",
   ]);
@@ -65,7 +71,7 @@ export default async function MerchantOrdersPage() {
         </select>
       </div>
       <DataTable
-        columns={["Order no", "Merchant order no", "Status", "Amount", "My fee", "Available in", "Reserve", "Attempts", "Created"]}
+        columns={["Order no", "Merchant order no", "Status", "Amount", "My fee", "Settlement amount", "Reserve", "Settlement", "Frozen", "Release at", "Attempts", "Created"]}
         rows={rows}
         empty="No orders found."
       />

@@ -12,26 +12,29 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_AP
 type Withdraw = {
   id: string;
   withdrawNo: string;
+  ownerType?: "MERCHANT" | "AGENT";
   status: string;
   amount: string;
   currency: string;
+  asset?: string | null;
+  network?: string | null;
+  addressSnapshot?: string | null;
+  addressLabelSnapshot?: string | null;
+  createdAt?: string;
   merchant?: { name: string } | null;
+  agent?: { name: string } | null;
 };
-
-function riskTags(withdraw: Withdraw) {
-  const tags = [];
-  if (Number(withdraw.amount) >= 1000) tags.push("大额提现");
-  if (withdraw.status === "PENDING") tags.push("待人工审核");
-  tags.push("规则已匹配");
-  return tags;
-}
 
 export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [tab, setTab] = useState<"pending" | "processed">("pending");
   const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject" | "paid"; label: string } | null>(null);
+  const visibleWithdraws = withdraws.filter((withdraw) => (
+    tab === "pending" ? withdraw.status === "PENDING" : ["APPROVED", "REJECTED", "PAID"].includes(withdraw.status)
+  ));
 
   async function review(id: string, action: "approve" | "reject" | "paid") {
     setBusy(`${id}:${action}`);
@@ -59,7 +62,11 @@ export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
       <div className="grid gap-2 border-b border-line p-4">
         <div>
           <h3 className="font-black text-slate-950">提现审核工作台</h3>
-          <p className="mt-1 text-sm text-muted">运营可查看风险标签、提现金额、商户历史和钱包影响后再审核。</p>
+          <p className="mt-1 text-sm text-muted">运营可查看用户类型、提现金额、币种网络和钱包地址快照后再审核。</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={tab === "pending" ? "px-4 py-2 text-xs" : "button secondary px-4 py-2 text-xs"} onClick={() => setTab("pending")}>待处理</button>
+          <button type="button" className={tab === "processed" ? "px-4 py-2 text-xs" : "button secondary px-4 py-2 text-xs"} onClick={() => setTab("processed")}>已处理</button>
         </div>
         <Toast message={message} type="success" />
         <Toast message={error} type="error" />
@@ -67,7 +74,7 @@ export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
       <table className="w-full border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-slate-600">
           <tr>
-            {["提现单", "商户", "状态", "金额", "风险标签", "风险评分", "操作"].map((column) => (
+            {["提现单", "用户类型", "用户名称", "金额", "币种", "网络", "钱包名称", "地址尾号", "状态", "创建时间", "操作"].map((column) => (
               <th key={column} className="px-4 py-3 font-semibold">
                 {column}
               </th>
@@ -75,35 +82,42 @@ export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
           </tr>
         </thead>
         <tbody>
-          {withdraws.length === 0 ? (
+          {visibleWithdraws.length === 0 ? (
             <tr className="border-t border-line">
-              <td className="px-4 py-5 text-muted" colSpan={7}>
-                暂无提现申请。新的提现会显示在这里。
+              <td className="px-4 py-5 text-muted" colSpan={11}>
+                {tab === "pending" ? "暂无待处理提现申请。" : "暂无已处理提现申请。"}
               </td>
             </tr>
           ) : null}
-          {withdraws.map((withdraw) => (
+          {visibleWithdraws.map((withdraw) => (
             <tr key={withdraw.id} className="border-t border-line">
               <td className="px-4 py-3 font-bold text-slate-900">{withdraw.withdrawNo}</td>
-              <td className="px-4 py-3 text-slate-700">{withdraw.merchant?.name ?? "-"}</td>
-              <td className="px-4 py-3 text-slate-700"><StatusBadge status={withdraw.status} /></td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.ownerType === "AGENT" ? "Agent" : "Merchant"}</td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.ownerType === "AGENT" ? withdraw.agent?.name ?? "-" : withdraw.merchant?.name ?? "-"}</td>
               <td className="px-4 py-3 text-slate-700">{money(withdraw.amount, withdraw.currency)}</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-wrap gap-1">
-                  {riskTags(withdraw).map((tag) => <span key={tag} className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{tag}</span>)}
-                </div>
-              </td>
-              <td className="px-4 py-3 font-black text-slate-900">{Number(withdraw.amount) >= 1000 ? "78" : "34"}</td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.asset ?? "-"}</td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.network ?? "-"}</td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.addressLabelSnapshot ?? "-"}</td>
+              <td className="px-4 py-3 font-mono text-slate-700">{withdraw.addressSnapshot ? `****${withdraw.addressSnapshot.slice(-4)}` : "-"}</td>
+              <td className="px-4 py-3 text-slate-700"><StatusBadge status={withdraw.status} /></td>
+              <td className="px-4 py-3 text-slate-700">{withdraw.createdAt ? new Date(withdraw.createdAt).toLocaleString() : "-"}</td>
               <td className="flex flex-wrap gap-2 px-4 py-3">
-                <button type="button" className="px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "approve", label: "Approve withdraw" })}>
-                  {busy === `${withdraw.id}:approve` ? "..." : "Approve"}
-                </button>
-                <button type="button" className="button secondary px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "reject", label: "Reject withdraw" })}>
-                  Reject
-                </button>
-                <button type="button" className="button secondary px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "paid", label: "Mark withdraw paid" })}>
-                  Mark Paid
-                </button>
+                {withdraw.status === "PENDING" ? (
+                  <>
+                    <button type="button" className="px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "approve", label: "批准提现" })}>
+                      {busy === `${withdraw.id}:approve` ? "..." : "批准"}
+                    </button>
+                    <button type="button" className="button secondary px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "reject", label: "拒绝提现" })}>
+                      拒绝
+                    </button>
+                  </>
+                ) : withdraw.status === "APPROVED" ? (
+                  <button type="button" className="button secondary px-4 py-2 text-xs" disabled={!!busy} onClick={() => setConfirm({ id: withdraw.id, action: "paid", label: "标记已支付" })}>
+                    标记已支付
+                  </button>
+                ) : (
+                  <span className="text-xs font-bold text-muted">已处理</span>
+                )}
               </td>
             </tr>
           ))}
@@ -112,7 +126,7 @@ export function AdminWithdrawActions({ withdraws }: { withdraws: Withdraw[] }) {
       <ConfirmDialog
         open={!!confirm}
         title={confirm?.label ?? "Confirm action"}
-        text="This updates the withdraw status and wallet ledger. Continue?"
+        text="此操作会更新提现状态、钱包流水和审计日志。请确认钱包地址快照和网络无误。"
         confirmLabel={confirm?.label ?? "Confirm"}
         onCancel={() => setConfirm(null)}
         onConfirm={() => {

@@ -11,7 +11,11 @@ function sign(timestamp, nonce, body) {
 }
 
 async function request(baseUrl, path, options = {}) {
-  const response = await fetch(`${baseUrl}${path}`, options);
+  let response = await fetch(`${baseUrl}${path}`, options);
+  for (let attempt = 0; response.status === 429 && attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    response = await fetch(`${baseUrl}${path}`, options);
+  }
   const text = await response.text();
   let payload;
   try {
@@ -27,7 +31,11 @@ async function request(baseUrl, path, options = {}) {
 }
 
 async function raw(path, options = {}) {
-  const response = await fetch(`${apiBaseUrl}${path}`, options);
+  let response = await fetch(`${apiBaseUrl}${path}`, options);
+  for (let attempt = 0; response.status === 429 && attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    response = await fetch(`${apiBaseUrl}${path}`, options);
+  }
   const text = await response.text();
   let payload;
   try {
@@ -106,6 +114,85 @@ const merchants = data(await request(apiBaseUrl, "/api/admin/merchants"));
 const demoAgent = agents[0];
 const demoMerchant = merchants.find((merchant) => merchant.email === "merchant@payhub.local") ?? merchants[0];
 
+async function ensureAddress(ownerPath, labelPrefix) {
+  const addresses = data(await request(apiBaseUrl, `/api/${ownerPath}/wallet/withdraw-addresses`));
+  if (addresses.length > 0) {
+    return addresses[0];
+  }
+  return data(await request(apiBaseUrl, `/api/${ownerPath}/wallet/withdraw-addresses`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      label: `${labelPrefix} USDT TRC20`,
+      asset: "USDT",
+      network: "TRC20",
+      address: `TQx${labelPrefix.replace(/\W/g, "")}${Date.now()}A9f3`,
+    }),
+  }));
+}
+
+const merchantWithdrawAddress = await check("V1.8-1. Merchant 能新增或读取 USDT TRC20 提现地址", () => ensureAddress("merchant", "Merchant Smoke"));
+await check("V1.8-2. Merchant 最多只能新增 5 个提现地址", async () => {
+  let addresses = data(await request(apiBaseUrl, "/api/merchant/wallet/withdraw-addresses"));
+  while (addresses.length < 5) {
+    await request(apiBaseUrl, "/api/merchant/wallet/withdraw-addresses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        label: `Merchant Limit ${addresses.length + 1}`,
+        asset: "USDT",
+        network: "TRC20",
+        address: `TQxMerchantLimit${Date.now()}${addresses.length}`,
+      }),
+    });
+    addresses = data(await request(apiBaseUrl, "/api/merchant/wallet/withdraw-addresses"));
+  }
+  const { response, text } = await raw("/api/merchant/wallet/withdraw-addresses", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ label: "Over limit", asset: "USDT", network: "TRC20", address: `TQxOverLimit${Date.now()}` }),
+  });
+  if (response.ok || !text.includes("WITHDRAW_ADDRESS_LIMIT_REACHED")) {
+    throw new Error(`Expected WITHDRAW_ADDRESS_LIMIT_REACHED, got ${response.status} ${text}`);
+  }
+});
+await check("V1.8-3/4. Merchant 不能提现地址编辑或删除", async () => {
+  const patch = await raw(`/api/merchant/wallet/withdraw-addresses/${merchantWithdrawAddress.id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ label: "Should not edit" }),
+  });
+  const del = await raw(`/api/merchant/wallet/withdraw-addresses/${merchantWithdrawAddress.id}`, { method: "DELETE" });
+  if (patch.response.ok || del.response.ok) {
+    throw new Error(`Expected edit/delete endpoints to be unavailable, got ${patch.response.status}/${del.response.status}`);
+  }
+});
+const agentWithdrawAddress = await check("V1.8-14. Agent 能新增或读取提现地址", () => ensureAddress("agent", "Agent Smoke"));
+await check("V1.8-15. Agent 最多只能新增 5 个提现地址", async () => {
+  let addresses = data(await request(apiBaseUrl, "/api/agent/wallet/withdraw-addresses"));
+  while (addresses.length < 5) {
+    await request(apiBaseUrl, "/api/agent/wallet/withdraw-addresses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        label: `Agent Limit ${addresses.length + 1}`,
+        asset: "USDT",
+        network: "TRC20",
+        address: `TQxAgentLimit${Date.now()}${addresses.length}`,
+      }),
+    });
+    addresses = data(await request(apiBaseUrl, "/api/agent/wallet/withdraw-addresses"));
+  }
+  const { response, text } = await raw("/api/agent/wallet/withdraw-addresses", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ label: "Over limit", asset: "USDT", network: "TRC20", address: `TQxAgentOverLimit${Date.now()}` }),
+  });
+  if (response.ok || !text.includes("WITHDRAW_ADDRESS_LIMIT_REACHED")) {
+    throw new Error(`Expected WITHDRAW_ADDRESS_LIMIT_REACHED, got ${response.status} ${text}`);
+  }
+});
+
 const psp = data(await check("V1.5-1. Admin 可新增 PSP", () => request(apiBaseUrl, "/api/admin/suppliers", {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -127,6 +214,7 @@ const channel = data(await check("V1.5-2. Admin 可新增通道", () => request(
     pspFixedFee: "0",
     rollingReserveRate: "0.05",
     rollingReserveDays: 7,
+    settlementDays: 7,
   }),
 })));
 
@@ -194,7 +282,7 @@ await check("V1.5-17. 提现最低金额校验生效", async () => {
   const { response, text } = await raw("/api/merchant/withdraws", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ amount: "0.01", currency: "USD", bankName: "Smoke Bank", bankAccount: `LOW${stamp}`, accountName: "Smoke" }),
+    body: JSON.stringify({ amount: "99.99", currency: "USD", withdrawAddressId: merchantWithdrawAddress.id }),
   });
   if (response.ok || !text.includes("WITHDRAW_AMOUNT_TOO_LOW")) {
     throw new Error(`Expected WITHDRAW_AMOUNT_TOO_LOW, got ${response.status} ${text}`);
@@ -205,7 +293,7 @@ await check("V1.5-18. 提现最高金额校验生效", async () => {
   const { response, text } = await raw("/api/merchant/withdraws", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ amount: "6000.00", currency: "USD", bankName: "Smoke Bank", bankAccount: `HIGH${stamp}`, accountName: "Smoke" }),
+    body: JSON.stringify({ amount: "50001.00", currency: "USD", withdrawAddressId: merchantWithdrawAddress.id }),
   });
   if (response.ok || !text.includes("WITHDRAW_AMOUNT_TOO_HIGH")) {
     throw new Error(`Expected WITHDRAW_AMOUNT_TOO_HIGH, got ${response.status} ${text}`);
@@ -213,6 +301,7 @@ await check("V1.5-18. 提现最高金额校验生效", async () => {
 });
 
 const walletBefore = data(await request(apiBaseUrl, "/api/merchant/wallet"));
+const agentWalletBefore = data(await request(apiBaseUrl, "/api/agent/wallet"));
 const checkoutOrderBody = {
   merchantOrderNo: `CHECKOUT-${stamp}`,
   amount: "20.00",
@@ -305,17 +394,24 @@ if (paidOrder.status !== "PAID") {
   throw new Error(`Expected order ${createdOrder.orderNo} to be PAID, got ${paidOrder.status}`);
 }
 
-const walletAfterPayment = await check("11. 钱包入账成功", async () => {
+const walletAfterPayment = await check("V1.8-19. T+7 支付成功后商户资金进入 frozen_balance", async () => {
   const wallet = data(await request(apiBaseUrl, "/api/merchant/wallet"));
-  if (Number(wallet.availableBalance) <= Number(walletBefore.availableBalance)) {
-    throw new Error("Expected wallet available balance to increase after payment callback");
+  if (Number(wallet.frozenBalance) <= Number(walletBefore.frozenBalance)) {
+    throw new Error("Expected merchant frozen balance to increase after T+7 payment");
   }
   return wallet;
 });
 
-await check("V1.5-14. 钱包入账 net_amount 正确", async () => {
-  if (Number(walletAfterPayment.availableBalance) <= Number(walletBefore.availableBalance)) {
-    throw new Error("Expected wallet to increase after checkout and callback tests");
+await check("V1.8-20. T+7 支付成功后代理利润进入 frozen_balance", async () => {
+  const wallet = data(await request(apiBaseUrl, "/api/agent/wallet"));
+  if (Number(wallet.frozenBalance) <= Number(agentWalletBefore.frozenBalance)) {
+    throw new Error("Expected agent frozen balance to increase after T+7 payment");
+  }
+});
+
+await check("V1.8-21/22. frozen_balance 和 rolling_reserve_balance 不可提现", async () => {
+  if (Number(walletAfterPayment.availableBalance) !== Number(walletBefore.availableBalance)) {
+    throw new Error("Expected T+7 payment not to increase merchant available balance before release");
   }
 });
 
@@ -323,11 +419,9 @@ const withdraw = data(await check("12. 提现申请成功", () => request(apiBas
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
-    amount: "10.00",
+    amount: "100.00",
     currency: "USD",
-    bankName: "Automation Bank",
-    bankAccount: `AUTO${Date.now()}`,
-    accountName: "Demo Global Shop Ltd",
+    withdrawAddressId: merchantWithdrawAddress.id,
   }),
 })));
 
@@ -340,6 +434,56 @@ await check("13. Admin 审核提现成功", async () => {
   return paidWithdraw;
 });
 
+await check("V1.8-13. Admin 拒绝提现后余额返还", async () => {
+  const before = data(await request(apiBaseUrl, "/api/merchant/wallet"));
+  const rejected = data(await request(apiBaseUrl, "/api/merchant/withdraws", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ amount: "100.00", currency: "USD", withdrawAddressId: merchantWithdrawAddress.id }),
+  }));
+  const afterRequest = data(await request(apiBaseUrl, "/api/merchant/wallet"));
+  if (Number(afterRequest.availableBalance) >= Number(before.availableBalance)) {
+    throw new Error("Expected available balance to decrease after withdraw request");
+  }
+  await request(apiBaseUrl, `/api/admin/withdraws/${rejected.id}/reject`, { method: "PATCH" });
+  const afterReject = data(await request(apiBaseUrl, "/api/merchant/wallet"));
+  if (Number(afterReject.availableBalance) < Number(before.availableBalance)) {
+    throw new Error("Expected available balance to return after rejection");
+  }
+});
+
+await check("V1.8-16/17/18. Agent 能申请提现并进入 Admin 待处理/审核", async () => {
+  const agentWithdraw = data(await request(apiBaseUrl, "/api/agent/withdraws", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ amount: "100.00", currency: "USD", withdrawAddressId: agentWithdrawAddress.id }),
+  }));
+  const adminWithdraws = data(await request(apiBaseUrl, "/api/admin/withdraws"));
+  if (!adminWithdraws.some((item) => item.id === agentWithdraw.id && item.ownerType === "AGENT" && item.status === "PENDING")) {
+    throw new Error("Expected agent withdraw to enter admin pending list");
+  }
+  const approved = data(await request(apiBaseUrl, `/api/admin/withdraws/${agentWithdraw.id}/approve`, { method: "PATCH" }));
+  if (approved.status !== "APPROVED") {
+    throw new Error(`Expected APPROVED, got ${approved.status}`);
+  }
+});
+
+await check("V1.8-23. 到期释放后 frozen_balance 减少且 available_balance 增加", async () => {
+  const before = data(await request(apiBaseUrl, "/api/merchant/wallet"));
+  const release = data(await request(apiBaseUrl, "/api/admin/settlements/release-due", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ now: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString() }),
+  }));
+  const after = data(await request(apiBaseUrl, "/api/merchant/wallet"));
+  if (!release.released?.length) {
+    throw new Error("Expected at least one settlement to be released");
+  }
+  if (Number(after.availableBalance) <= Number(before.availableBalance) || Number(after.frozenBalance) >= Number(before.frozenBalance)) {
+    throw new Error("Expected release to move funds from frozen to available");
+  }
+});
+
 const webhookLogs = data(await request(apiBaseUrl, "/api/admin/webhook-logs"));
 if (!Array.isArray(webhookLogs) || webhookLogs.length === 0) {
   throw new Error("Expected webhook logs to contain at least one entry");
@@ -349,9 +493,12 @@ await check("V1.5-15. Webhook 日志写入", async () => {
     throw new Error("Expected checkout webhook log");
   }
 });
-await check("V1.5-19. 提现手续费计算正确", async () => {
-  if (Number(withdraw.feeAmount) <= 0 || Number(withdraw.actualPayout) <= 0) {
-    throw new Error(`Expected withdraw fee and payout, got ${withdraw.feeAmount}/${withdraw.actualPayout}`);
+await check("V1.8-5/10. 提现使用钱包地址且成功后扣除 available_balance", async () => {
+  if (Number(withdraw.feeAmount) !== 0 || Number(withdraw.actualPayout) !== Number(withdraw.amount)) {
+    throw new Error(`Expected crypto withdraw fee 0 and payout amount, got ${withdraw.feeAmount}/${withdraw.actualPayout}`);
+  }
+  if (!withdraw.addressSnapshot || !withdraw.asset || !withdraw.network) {
+    throw new Error("Expected withdraw to include address snapshot, asset and network");
   }
 });
 await check("V1.5-20. audit_logs 正确记录", async () => {
