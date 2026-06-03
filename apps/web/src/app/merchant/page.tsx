@@ -1,3 +1,5 @@
+import { CheckoutLinkActions } from "@/components/CheckoutLinkActions";
+import { CheckoutStatusBadge } from "@/components/CheckoutStatusBadge";
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
 import { OpsMetricCard, SectionHeader } from "@/components/ProductOps";
@@ -27,7 +29,9 @@ type Order = {
   status: string;
   amount: string;
   currency: string;
+  paymentUrl?: string | null;
   createdAt?: string;
+  attempts?: { requestPayload?: { sandboxResult?: string } | null }[];
 };
 
 type Withdraw = {
@@ -75,6 +79,14 @@ export default async function MerchantDashboardPage() {
     order.createdAt ? new Date(order.createdAt).toLocaleString() : "-",
   ]);
 
+  const isTimeoutOrder = (order: Order) => order.attempts?.some((attempt) => attempt.requestPayload?.sandboxResult === "timeout") ?? false;
+  const recentCheckoutRows = orders.filter((order) => !!order.paymentUrl).slice(0, 6).map((order) => [
+    order.orderNo,
+    money(order.amount, order.currency),
+    <CheckoutStatusBadge key={`${order.orderNo}-checkout-status`} status={order.status} isTimeout={isTimeoutOrder(order)} />,
+    <CheckoutLinkActions key={`${order.orderNo}-checkout`} orderNo={order.orderNo} showCopy={false} />,
+  ]);
+
   const recentWithdrawRows = withdraws.slice(0, 6).map((withdraw) => [
     withdraw.withdrawNo,
     <StatusBadge key={`${withdraw.withdrawNo}-status`} status={withdraw.status} />,
@@ -94,6 +106,15 @@ export default async function MerchantDashboardPage() {
         {stats.map((stat) => (
           <OpsMetricCard key={stat.label} {...stat} />
         ))}
+      </section>
+
+      <section className="mt-8">
+        <SectionHeader title="最近 Checkout 订单" text="最近 6 笔可进入收银台的订单，便于运营快速核对支付状态。" />
+        <DataTable
+          columns={["订单号", "金额", "状态", "查看收银台"]}
+          rows={recentCheckoutRows}
+          empty="暂无 Checkout 订单。"
+        />
       </section>
 
       <section className="mt-8 grid gap-8 xl:grid-cols-2">

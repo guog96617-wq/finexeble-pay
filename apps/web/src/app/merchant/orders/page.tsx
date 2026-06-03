@@ -1,3 +1,5 @@
+import { CheckoutLinkActions } from "@/components/CheckoutLinkActions";
+import { CheckoutStatusBadge } from "@/components/CheckoutStatusBadge";
 import { DataTable } from "@/components/DataTable";
 import { DashboardShell } from "@/components/DashboardShell";
 import { Pagination } from "@/components/Pagination";
@@ -22,23 +24,24 @@ type Order = {
   settlementDays?: number;
   settlementReleaseAt?: string | null;
   createdAt?: string;
-  attempts?: { attemptNo: number; status: string; channel?: { name: string } | null }[];
+  channel?: { name: string; paymentMethod?: string } | null;
+  attempts?: { attemptNo: number; status: string; requestPayload?: { sandboxResult?: string } | null; channel?: { name: string; paymentMethod?: string } | null }[];
 };
 
 export default async function MerchantOrdersPage() {
   const orders = await apiGet<Order[]>("/api/merchant/orders", []);
+  const isTimeoutOrder = (order: Order) => order.attempts?.some((attempt) => attempt.requestPayload?.sandboxResult === "timeout") ?? false;
+  const channelLabel = (order: Order) => order.channel?.name ?? order.attempts?.find((attempt) => attempt.channel)?.channel?.name ?? "-";
   const rows = orders.map((order) => [
     order.orderNo,
     order.merchantOrderNo,
-    <StatusBadge key={`${order.orderNo}-status`} status={order.status} />,
     money(order.amount, order.currency),
-    money(order.merchantFeeAmount ?? 0, order.currency),
-    money(order.merchantAvailableAmount ?? 0, order.currency),
-    money(order.rollingReserveAmount ?? 0, order.currency),
-    order.settlementType ?? `T+${order.settlementDays ?? 0}`,
-    Number(order.settlementDays ?? 0) > 0 ? "YES" : "NO",
-    order.settlementReleaseAt ? new Date(order.settlementReleaseAt).toLocaleString() : "-",
-    order.attempts?.map((attempt) => `${attempt.attemptNo}.${attempt.status}${attempt.channel?.name ? ` ${attempt.channel.name}` : ""}`).join(" / ") ?? "-",
+    order.currency,
+    <StatusBadge key={`${order.orderNo}-status`} status={order.status} />,
+    channelLabel(order),
+    <CheckoutStatusBadge key={`${order.orderNo}-checkout-status`} status={order.status} isTimeout={isTimeoutOrder(order)} />,
+    <CheckoutLinkActions key={`${order.orderNo}-copy`} orderNo={order.orderNo} showUrl showView={false} />,
+    <CheckoutLinkActions key={`${order.orderNo}-view`} orderNo={order.orderNo} showCopy={false} />,
     order.createdAt ? new Date(order.createdAt).toLocaleString() : "-",
   ]);
 
@@ -71,7 +74,7 @@ export default async function MerchantOrdersPage() {
         </select>
       </div>
       <DataTable
-        columns={["Order no", "Merchant order no", "Status", "Amount", "My fee", "Settlement amount", "Reserve", "Settlement", "Frozen", "Release at", "Attempts", "Created"]}
+        columns={["订单号", "商户单号", "金额", "币种", "状态", "通道", "Checkout 状态", "支付链接", "操作", "创建时间"]}
         rows={rows}
         empty="No orders found."
       />
